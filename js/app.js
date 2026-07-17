@@ -807,9 +807,8 @@
 
   const GameWorld = (() => {
     const W = 352, H = 224, WALL_H = 64, SPEED = 76, R = 8, WAKE_MS = 1400;
-    let raf = 0, last = 0, ctx = null, canvas = null, local = null, remotes = new Map(), keys = new Set(), lastSent = 0, wakeStarted = 0;
-    const beds = [{ x: 62, y: 128, w: 32, h: 64 }, { x: 160, y: 134, w: 32, h: 64 }, { x: 258, y: 128, w: 32, h: 64 }];
-    const solids = [{ x: 0, y: 0, w: W, h: WALL_H - 8 }, { x: 312, y: 2, w: 32, h: 64 }, ...beds];
+    let raf = 0, last = 0, ctx = null, canvas = null, local = null, remotes = new Map(), keys = new Set(), lastSent = 0, wakeStarted = 0, beds = [];
+    const roomSolids = [{ x: 0, y: 0, w: W, h: WALL_H - 8 }, { x: 312, y: 2, w: 32, h: 64 }];
 
     function playerList(players) {
       const base = players?.length ? players : (room?.state?.players || [{ id: room?.selfId || 'solo', name: player?.name || 'tú' }]);
@@ -818,14 +817,17 @@
 
     function start(players) {
       stop();
-      goto('game', { blackout: true });
       canvas = $('#game-canvas'); ctx = canvas.getContext('2d');
       const list = playerList(players);
+      beds = bedLayout(list.length);
       const selfId = room?.selfId || list[0]?.id || 'solo';
-      local = { id: selfId, name: player?.name || list[0]?.name || 'tú', x: 78, y: 150, bedX: 62, bedY: 128, dir: 'down', moving: false, waking: true, badge: Math.max(0, list.findIndex((p) => p.id === selfId)) };
+      const badge = Math.max(0, list.findIndex((p) => p.id === selfId));
+      const ownBed = beds[badge] || beds[0];
+      const exit = bedExit(ownBed);
+      local = { id: selfId, name: player?.name || list[0]?.name || 'tú', x: ownBed.x + ownBed.w / 2, y: ownBed.y + 34, bedX: ownBed.x, bedY: ownBed.y, exitX: exit.x, exitY: exit.y, dir: 'down', moving: false, waking: true, bedSolid: false, badge };
       wakeStarted = performance.now();
-      remotes = new Map(list.filter((p) => p.id !== selfId).map((p, i) => [p.id, { id: p.id, name: p.name, x: 94 + i * 18, y: 150, dir: 'down', moving: false, badge: p.badge ?? i + 1 }]));
-      bindControls(); last = performance.now(); loop(last);
+      remotes = new Map(list.filter((p) => p.id !== selfId).map((p) => { const b = beds[p.badge] || beds[0]; const e = bedExit(b); return [p.id, { id: p.id, name: p.name, x: e.x, y: e.y, bedX: b.x, bedY: b.y, dir: 'down', moving: false, badge: p.badge ?? 1 }]; }));
+      bindControls(); last = performance.now(); goto('game'); loop(last);
     }
     function stop() { cancelAnimationFrame(raf); }
     function setRemote(id, st) { if (!local || id === local.id || !st) return; remotes.set(id, { ...(remotes.get(id) || { id, name: 'alma', badge: remotes.size + 1 }), ...st }); }
@@ -842,14 +844,30 @@
       });
     }
     function keyDir(k) { return ({ w: 'up', W: 'up', ArrowUp: 'up', s: 'down', S: 'down', ArrowDown: 'down', a: 'left', A: 'left', ArrowLeft: 'left', d: 'right', D: 'right', ArrowRight: 'right' })[k]; }
+    function bedLayout(count) {
+      const n = Math.max(1, count || 1), bw = 32, bh = 64, span = W - 64, gap = (span - n * bw) / (n + 1);
+      return Array.from({ length: n }, (_, i) => ({ x: Math.round(32 + gap + i * (bw + gap)), y: 128 + (i % 2) * 6, w: bw, h: bh }));
+    }
+    function bedExit(b) { return { x: b.x + b.w / 2, y: Math.min(H - 14, b.y + b.h + 14) }; }
+    function activeSolids() { return [...roomSolids, ...(local?.bedSolid ? beds : beds.filter((b) => b.x !== local.bedX || b.y !== local.bedY))]; }
     function blocked(nx, ny) {
       const box = { x: nx - R, y: ny - 4, w: R * 2, h: 12 };
-      return solids.some((o) => hit(box, o)) || [...remotes.values()].some((p) => Math.hypot(p.x - nx, p.y - ny) < R * 2);
+      return activeSolids().some((o) => hit(box, o)) || [...remotes.values()].some((p) => Math.hypot(p.x - nx, p.y - ny) < R * 2);
     }
     function hit(a, b) { return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y; }
     function update(dt, now) {
       const wake = Math.min(1, (now - wakeStarted) / WAKE_MS);
       local.waking = wake < 1;
+      if (local.waking) {
+        const rise = Math.max(0, (wake - 0.45) / 0.55);
+        if (rise > 0) {
+          const eased = 1 - Math.pow(1 - rise, 3);
+          local.x = local.bedX + 16 + (local.exitX - (local.bedX + 16)) * eased;
+          local.y = local.bedY + 34 + (local.exitY - (local.bedY + 34)) * eased;
+        }
+      } else if (!local.bedSolid) {
+        local.x = local.exitX; local.y = local.exitY; local.bedSolid = true;
+      }
       let dx = 0, dy = 0;
       if (!local.waking && keys.has('left')) dx--; if (!local.waking && keys.has('right')) dx++; if (!local.waking && keys.has('up')) dy--; if (!local.waking && keys.has('down')) dy++;
       if (dx || dy) { const l = Math.hypot(dx, dy); dx /= l; dy /= l; local.dir = Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? 'left' : 'right') : (dy < 0 ? 'up' : 'down'); }
