@@ -1345,3 +1345,18 @@ input {
 @media (hover: hover) and (pointer: fine) {
   .mobile-controls { opacity: 0.32; }
 }
+.game-hint {
+  position: absolute;
+  left: 50%;
+  top: max(16px, env(safe-area-inset-top));
+  transform: translateX(-50%);
+  z-index: 7;
+  color: rgba(216, 210, 196, 0.72);
+  font-family: var(--font-mono);
+  font-size: clamp(0.72rem, 2.6vw, 0.95rem);
+  letter-spacing: 0.08em;
+  text-align: center;
+  user-select: none;
+  pointer-events: none;
+  text-shadow: 0 0 10px #000;
+}

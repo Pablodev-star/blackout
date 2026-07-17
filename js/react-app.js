@@ -237,6 +237,7 @@
       <button class="mobile-arrow down" data-dir="down" aria-label="Abajo">▼</button>
       <button class="mobile-arrow right" data-dir="right" aria-label="Derecha">▶</button>
     </div>
+    <p class="game-hint">WASD / flechas — levántate y no atravieses a nadie</p>
   </section>
 
   <!-- ══════════ GALERÍA DE ASSETS (preview tras abrir un file) ══════════ -->
