@@ -228,6 +228,18 @@
     <p class="cutscene-caption">La linterna parpadea… pero la oscuridad no responde.</p>
   </section>
 
+  <!-- ══════════ JUEGO REAL ══════════ -->
+  <section id="screen-game" class="screen game-screen">
+    <canvas id="game-canvas" class="game-canvas" aria-label="Dormitorio jugable"></canvas>
+    <div id="mobile-controls" class="mobile-controls" aria-label="Controles móviles">
+      <button class="mobile-arrow up" data-dir="up" aria-label="Arriba">▲</button>
+      <button class="mobile-arrow left" data-dir="left" aria-label="Izquierda">◀</button>
+      <button class="mobile-arrow down" data-dir="down" aria-label="Abajo">▼</button>
+      <button class="mobile-arrow right" data-dir="right" aria-label="Derecha">▶</button>
+    </div>
+    <p class="game-hint">WASD / flechas — levántate y no atravieses a nadie</p>
+  </section>
+
   <!-- ══════════ GALERÍA DE ASSETS (preview tras abrir un file) ══════════ -->
   <section id="screen-gallery" class="screen">
     <header class="screen-header">
@@ -320,6 +332,7 @@
     leaderboards: $('#screen-leaderboards'),
     gallery: $('#screen-gallery'),
     cutscene: $('#screen-cutscene'),
+    game: $('#screen-game'),
   };
 
   function goto(name, { blackout = false } = {}) {
@@ -606,6 +619,7 @@
       onCountdownStart: () => startCountdownUI(),
       onCountdownCancel: (reason) => cancelCountdownUI(reason),
       onGameStart: () => onGameStart(),
+      onPlayerState: (id, state) => updateRemotePlayer(id, state),
       onClosed: (reason) => {
         stopCountdownUI();
         room = null;
@@ -784,9 +798,100 @@
   function startInitialCutscene(players) {
     goto('cutscene', { blackout: true });
     setTimeout(() => {
-      try { Cutscene.start({ players }); } catch (e) { console.error('[cutscene]', e); }
+      try { Cutscene.start({ players, onDone: () => startPlayableGame(players) }); } catch (e) { console.error('[cutscene]', e); startPlayableGame(players); }
     }, 260);
   }
+
+
+  // ══════════ JUEGO REAL: dormitorio jugable ══════════
+
+  const GameWorld = (() => {
+    const W = 352, H = 224, WALL_H = 64, SPEED = 76, R = 8, WAKE_MS = 1400;
+    let raf = 0, last = 0, ctx = null, canvas = null, local = null, remotes = new Map(), keys = new Set(), lastSent = 0, wakeStarted = 0;
+    const beds = [{ x: 62, y: 128, w: 32, h: 64 }, { x: 160, y: 134, w: 32, h: 64 }, { x: 258, y: 128, w: 32, h: 64 }];
+    const solids = [{ x: 0, y: 0, w: W, h: WALL_H - 8 }, { x: 312, y: 2, w: 32, h: 64 }, ...beds];
+
+    function playerList(players) {
+      const base = players?.length ? players : (room?.state?.players || [{ id: room?.selfId || 'solo', name: player?.name || 'tú' }]);
+      return base.map((p, i) => ({ ...p, id: p.id || (i === 0 ? room?.selfId : `solo-${i}`) || `solo-${i}`, badge: i }));
+    }
+
+    function start(players) {
+      stop();
+      goto('game', { blackout: true });
+      canvas = $('#game-canvas'); ctx = canvas.getContext('2d');
+      const list = playerList(players);
+      const selfId = room?.selfId || list[0]?.id || 'solo';
+      local = { id: selfId, name: player?.name || list[0]?.name || 'tú', x: 78, y: 150, bedX: 62, bedY: 128, dir: 'down', moving: false, waking: true, badge: Math.max(0, list.findIndex((p) => p.id === selfId)) };
+      wakeStarted = performance.now();
+      remotes = new Map(list.filter((p) => p.id !== selfId).map((p, i) => [p.id, { id: p.id, name: p.name, x: 94 + i * 18, y: 150, dir: 'down', moving: false, badge: p.badge ?? i + 1 }]));
+      bindControls(); last = performance.now(); loop(last);
+    }
+    function stop() { cancelAnimationFrame(raf); }
+    function setRemote(id, st) { if (!local || id === local.id || !st) return; remotes.set(id, { ...(remotes.get(id) || { id, name: 'alma', badge: remotes.size + 1 }), ...st }); }
+    function bindControls() {
+      if (bindControls.done) return; bindControls.done = true;
+      window.addEventListener('keydown', (e) => { const d = keyDir(e.key); if (d) { keys.add(d); e.preventDefault(); } });
+      window.addEventListener('keyup', (e) => { const d = keyDir(e.key); if (d) keys.delete(d); });
+      $$('.mobile-arrow').forEach((btn) => {
+        const dir = btn.dataset.dir;
+        btn.addEventListener('contextmenu', (e) => e.preventDefault());
+        btn.addEventListener('pointerdown', (e) => { btn.setPointerCapture(e.pointerId); keys.add(dir); e.preventDefault(); });
+        const up = (e) => { keys.delete(dir); try { btn.releasePointerCapture(e.pointerId); } catch {} e.preventDefault(); };
+        btn.addEventListener('pointerup', up); btn.addEventListener('pointercancel', up); btn.addEventListener('lostpointercapture', () => keys.delete(dir));
+      });
+    }
+    function keyDir(k) { return ({ w: 'up', W: 'up', ArrowUp: 'up', s: 'down', S: 'down', ArrowDown: 'down', a: 'left', A: 'left', ArrowLeft: 'left', d: 'right', D: 'right', ArrowRight: 'right' })[k]; }
+    function blocked(nx, ny) {
+      const box = { x: nx - R, y: ny - 4, w: R * 2, h: 12 };
+      return solids.some((o) => hit(box, o)) || [...remotes.values()].some((p) => Math.hypot(p.x - nx, p.y - ny) < R * 2);
+    }
+    function hit(a, b) { return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y; }
+    function update(dt, now) {
+      const wake = Math.min(1, (now - wakeStarted) / WAKE_MS);
+      local.waking = wake < 1;
+      let dx = 0, dy = 0;
+      if (!local.waking && keys.has('left')) dx--; if (!local.waking && keys.has('right')) dx++; if (!local.waking && keys.has('up')) dy--; if (!local.waking && keys.has('down')) dy++;
+      if (dx || dy) { const l = Math.hypot(dx, dy); dx /= l; dy /= l; local.dir = Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? 'left' : 'right') : (dy < 0 ? 'up' : 'down'); }
+      local.moving = Boolean(dx || dy);
+      const nx = Math.max(12, Math.min(W - 12, local.x + dx * SPEED * dt));
+      const ny = Math.max(WALL_H + 10, Math.min(H - 10, local.y + dy * SPEED * dt));
+      if (!blocked(nx, local.y)) local.x = nx; if (!blocked(local.x, ny)) local.y = ny;
+      if (room?.emit && now - lastSent > 90) { lastSent = now; room.emit('player-state', { x: local.x, y: local.y, dir: local.dir, moving: local.moving, name: local.name, badge: local.badge }); }
+    }
+    function draw(now) {
+      const dpr = window.devicePixelRatio || 1, r = canvas.getBoundingClientRect();
+      canvas.width = Math.floor(r.width * dpr); canvas.height = Math.floor(r.height * dpr);
+      const scale = Math.max(1, Math.floor(Math.min(canvas.width / W, canvas.height / H))), ox = Math.floor((canvas.width - W * scale) / 2), oy = Math.floor((canvas.height - H * scale) / 2);
+      ctx.fillStyle = '#000'; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.save(); ctx.translate(ox, oy); ctx.scale(scale, scale); ctx.imageSmoothingEnabled = false;
+      for (let y = 0; y < H; y += 16) for (let x = 0; x < W; x += 16) PixelArt.draw(ctx, TILES_HOUSE.sprites[y < WALL_H ? 'wall_panel' : (x + y) % 48 ? 'floor_wood_a' : 'floor_wood_b'], 0, x, y, { scale: 1 });
+      beds.forEach((b) => PixelArt.draw(ctx, TILES_HOUSE.sprites.bed, 0, b.x, b.y, { scale: 2 }));
+      const all = [local, ...remotes.values()].sort((a, b) => a.y - b.y);
+      all.forEach((p) => drawPlayer(p, now));
+      ctx.fillStyle = 'rgba(0,0,0,.38)'; ctx.fillRect(0, 0, W, H); ctx.restore();
+    }
+    function drawPlayer(p, now) {
+      if (p.waking) {
+        const wake = Math.min(1, (now - wakeStarted) / WAKE_MS);
+        if (wake < 0.45) {
+          PixelArt.draw(ctx, PLAYER.sleep, Math.floor(now / 260) % 2, p.bedX, p.bedY + 8, { scale: 2, badge: p.badge || 0 });
+          return;
+        }
+        const rise = (wake - 0.45) / 0.55;
+        const y = p.y - 22 - Math.round((1 - rise) * 18);
+        PixelArt.draw(ctx, PLAYER.down, 0, Math.round(p.x - 8), y, { scale: 1, badge: p.badge || 0 });
+        return;
+      }
+      const side = p.dir === 'left' || p.dir === 'right'; const sprite = side ? PLAYER.side : PLAYER[p.dir || 'down'];
+      const seq = p.moving ? PLAYER.WALK_SEQ : PLAYER.IDLE_SEQ; const step = seq[Math.floor(now / 130) % seq.length];
+      PixelArt.draw(ctx, sprite, step.f, Math.round(p.x - 8), Math.round(p.y - 22 + step.dy), { scale: 1, flip: p.dir === 'right', badge: p.badge || 0 });
+    }
+    function loop(now) { update(Math.min(0.05, (now - last) / 1000), now); draw(now); last = now; raf = requestAnimationFrame(loop); }
+    return { start, stop, setRemote };
+  })();
+
+  function startPlayableGame(players) { Cutscene.stop?.(); GameWorld.start(players); }
+  function updateRemotePlayer(id, state) { GameWorld.setRemote(id, state); }
 
   // ══════════ LEADERBOARDS ══════════
 

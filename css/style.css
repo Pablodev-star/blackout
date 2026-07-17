@@ -1296,3 +1296,67 @@ input {
   opacity: 0.82;
 }
 .cutscene-waiting .cutscene-caption { opacity: 0; }
+
+/* ══════════ JUEGO REAL ══════════ */
+.game-screen {
+  padding: 0;
+  overflow: hidden;
+  background: #000;
+  touch-action: none;
+}
+.game-canvas {
+  width: 100vw;
+  height: 100vh;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  background: #000;
+}
+.mobile-controls {
+  position: absolute;
+  right: max(18px, env(safe-area-inset-right));
+  bottom: max(18px, env(safe-area-inset-bottom));
+  z-index: 8;
+  display: grid;
+  grid-template-columns: repeat(3, 54px);
+  grid-template-rows: repeat(3, 54px);
+  gap: 8px;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: none;
+}
+.mobile-arrow {
+  border: 1px solid rgba(216, 210, 196, 0.28);
+  border-radius: 14px;
+  background: rgba(5, 6, 10, 0.68);
+  color: rgba(216, 210, 196, 0.92);
+  font: 1.25rem var(--font-mono);
+  box-shadow: inset 0 0 18px rgba(0, 0, 0, 0.72), 0 0 18px rgba(122, 30, 44, 0.18);
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: none;
+}
+.mobile-arrow:active { transform: translateY(1px); border-color: rgba(194, 42, 42, 0.7); }
+.mobile-arrow.up { grid-column: 2; grid-row: 1; }
+.mobile-arrow.left { grid-column: 1; grid-row: 2; }
+.mobile-arrow.down { grid-column: 2; grid-row: 3; }
+.mobile-arrow.right { grid-column: 3; grid-row: 2; }
+@media (hover: hover) and (pointer: fine) {
+  .mobile-controls { opacity: 0.32; }
+}
+.game-hint {
+  position: absolute;
+  left: 50%;
+  top: max(16px, env(safe-area-inset-top));
+  transform: translateX(-50%);
+  z-index: 7;
+  color: rgba(216, 210, 196, 0.72);
+  font-family: var(--font-mono);
+  font-size: clamp(0.72rem, 2.6vw, 0.95rem);
+  letter-spacing: 0.08em;
+  text-align: center;
+  user-select: none;
+  pointer-events: none;
+  text-shadow: 0 0 10px #000;
+}

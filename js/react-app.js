@@ -228,6 +228,18 @@
     <p class="cutscene-caption">La linterna parpadea… pero la oscuridad no responde.</p>
   </section>
 
+  <!-- ══════════ JUEGO REAL ══════════ -->
+  <section id="screen-game" class="screen game-screen">
+    <canvas id="game-canvas" class="game-canvas" aria-label="Dormitorio jugable"></canvas>
+    <div id="mobile-controls" class="mobile-controls" aria-label="Controles móviles">
+      <button class="mobile-arrow up" data-dir="up" aria-label="Arriba">▲</button>
+      <button class="mobile-arrow left" data-dir="left" aria-label="Izquierda">◀</button>
+      <button class="mobile-arrow down" data-dir="down" aria-label="Abajo">▼</button>
+      <button class="mobile-arrow right" data-dir="right" aria-label="Derecha">▶</button>
+    </div>
+    <p class="game-hint">WASD / flechas — levántate y no atravieses a nadie</p>
+  </section>
+
   <!-- ══════════ GALERÍA DE ASSETS (preview tras abrir un file) ══════════ -->
   <section id="screen-gallery" class="screen">
     <header class="screen-header">
