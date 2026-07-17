@@ -40,11 +40,42 @@ El proyecto está vinculado en `js/config.js` al Project ID
 `fqcuhetsqwobuxuocwub` usando la publishable key pública. La clave secreta
 no se guarda en el frontend.
 
-Aplica `supabase/migrations/20260717000000_blackout_backend.sql` en Supabase
-para crear:
+### Crear las tablas
+
+1. Abre **Supabase Dashboard > SQL Editor** en el proyecto
+   `fqcuhetsqwobuxuocwub`.
+2. Copia todo el contenido de `supabase/blackout_schema.sql`.
+3. Pégalo en una consulta nueva y pulsa **Run**.
+4. Al final debe aparecer una consulta de verificación con estas 7 tablas:
+   `leaderboards`, `player_devices`, `player_states`, `players`,
+   `room_events`, `room_players` y `rooms`, además de la función
+   `claim_player_name`.
+
+`supabase/blackout_schema.sql` y
+`supabase/migrations/20260717000000_blackout_backend.sql` son idempotentes:
+puedes ejecutarlos otra vez si el proyecto quedó a medias o si Supabase no
+mostraba las tablas.
+
+### Si quieres automatizarlo con clave secreta
+
+No pongas la `service_role key` ni un token personal en `js/config.js`, en el
+frontend, ni en archivos del repo. Para automatizarlo, guarda el token como
+secreto cifrado del proveedor donde lo ejecutes, por ejemplo
+`SUPABASE_ACCESS_TOKEN` en GitHub Actions/Netlify/Vercel, y lanza:
+
+```bash
+SUPABASE_ACCESS_TOKEN=sbp_... node scripts/apply-supabase-schema.mjs
+```
+
+También puedes definir `SUPABASE_PROJECT_REF` si quieres usar otro proyecto; si
+no, el script usa `fqcuhetsqwobuxuocwub`.
+
+### Objetos creados
 
 - `players` y `player_devices`: nombre único por dispositivo y telemetría útil
-  accesible desde navegador. IP, puerto y cabeceras se capturan en la función
+  accesible desde navegador, incluyendo resolución/viewport, cookies,
+  zona horaria, plataforma, conexión y, si Supabase/CDN lo expone en headers,
+  ASN/proveedor de internet. IP, puerto y cabeceras se capturan en la función
   SQL `claim_player_name()` desde la petición que recibe Supabase.
 - `leaderboards`: rankings por `times`, `survival` y `credits`.
 - `rooms`, `room_players`, `player_states` y `room_events`: lobby, presencia,
@@ -53,6 +84,16 @@ para crear:
 La regla de nombres es: si el nombre existe y el `deviceId` coincide, el
 jugador vuelve a entrar; si el mismo nombre viene de otro dispositivo, se
 rechaza.
+
+### Solución de problemas
+
+- Si al ejecutar el SQL aparece una tabla con la columna `routine_name` y el
+  valor `claim_player_name`, eso es correcto: es la verificación final de que
+  la función RPC existe.
+- Si al crear una sala aparece `violates foreign key constraint`, el perfil que
+  estaba guardado en `localStorage` se creó antes de que existieran las tablas.
+  El juego ahora vuelve a vincular el perfil con Supabase justo antes de crear
+  o unirse a una sala para evitar ese error.
 
 ## Estructura
 

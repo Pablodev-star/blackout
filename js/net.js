@@ -58,6 +58,7 @@ const Net = (() => {
         .order('joined_at', { ascending: true });
       if (error) return console.warn('[Net] estado sala:', error);
       this.state = {
+        selfId: this.selfId,
         code: roomRow.code,
         name: roomRow.name,
         maxPlayers: roomRow.max_players,
@@ -128,17 +129,19 @@ const Net = (() => {
 
   async function createRoom({ roomName, maxPlayers, player, events }) {
     if (!useSupabase()) return LocalNet.createRoom({ roomName, maxPlayers, player, events });
+    const linkedPlayer = await Backend.requirePlayerProfile(player);
     const code = generateCode();
-    const { data: roomRow, error } = await sb().from('rooms').insert({ code, name: roomName, max_players: maxPlayers, host_device_id: player.deviceId }).select().single();
+    const { data: roomRow, error } = await sb().from('rooms').insert({ code, name: roomName, max_players: maxPlayers, host_device_id: linkedPlayer.deviceId }).select().single();
     if (error) throw error;
-    const session = new RealtimeRoomSession({ roomRow, player, isHost: true, events });
-    const { error: joinErr } = await sb().from('room_players').insert({ room_id: roomRow.id, session_id: session.selfId, player_device_id: player.deviceId, player_name: player.name, is_host: true });
+    const session = new RealtimeRoomSession({ roomRow, player: linkedPlayer, isHost: true, events });
+    const { error: joinErr } = await sb().from('room_players').insert({ room_id: roomRow.id, session_id: session.selfId, player_device_id: linkedPlayer.deviceId, player_name: linkedPlayer.name, is_host: true });
     if (joinErr) throw joinErr;
     return session.start();
   }
 
   async function joinRoom({ code, player, events }) {
     if (!useSupabase()) return LocalNet.joinRoom({ code, player, events });
+    const linkedPlayer = await Backend.requirePlayerProfile(player);
     const normalized = code.trim().toUpperCase();
     const { data: roomRows, error } = await sb().from('rooms').select('*').eq('code', normalized).in('status', ['waiting', 'countdown']).limit(1);
     if (error) throw error;
@@ -146,8 +149,8 @@ const Net = (() => {
     if (!roomRow) throw new Error('esa sala no existe… o ya no queda nadie vivo');
     const { count } = await sb().from('room_players').select('session_id', { count: 'exact', head: true }).eq('room_id', roomRow.id);
     if ((count || 0) >= roomRow.max_players) throw new Error('la sala está llena');
-    const session = new RealtimeRoomSession({ roomRow, player, isHost: false, events });
-    const { error: joinErr } = await sb().from('room_players').insert({ room_id: roomRow.id, session_id: session.selfId, player_device_id: player.deviceId, player_name: player.name });
+    const session = new RealtimeRoomSession({ roomRow, player: linkedPlayer, isHost: false, events });
+    const { error: joinErr } = await sb().from('room_players').insert({ room_id: roomRow.id, session_id: session.selfId, player_device_id: linkedPlayer.deviceId, player_name: linkedPlayer.name });
     if (joinErr) throw joinErr;
     return session.start();
   }
