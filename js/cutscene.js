@@ -56,24 +56,25 @@
   const WARDROBE = { x: 312, y: 2, w: 32, h: 64 };  // armario con rendija
   const GAP = { x: 306, y: 14, w: 5, h: 50 };       // rendija armario-pared
 
-  function bedLayout() {
-    // camas verticales (cabecero arriba), alineadas con los durmientes
-    const n = cast.length;
+  function bedLayoutForCount(count) {
+    const n = Math.max(1, count || 1);
     const bw = 32, bh = 64;
     const span = RW - 64;
     const gap = (span - n * bw) / (n + 1);
-    return cast.map((p, i) => ({
+    return Array.from({ length: n }, (_, i) => ({
       x: Math.round(32 + gap + i * (bw + gap)),
       y: 128 + (i % 2) * 6,
-      w: bw, h: bh, p,
+      w: bw, h: bh,
     }));
   }
 
+  function bedLayout() {
+    // camas verticales (cabecero arriba), alineadas con los durmientes
+    return bedLayoutForCount(cast.length).map((b, i) => ({ ...b, p: cast[i] }));
+  }
+
   // ── capa estática: se pinta una sola vez ──────────────────────
-  function buildStatic() {
-    staticLayer = document.createElement('canvas');
-    staticLayer.width = RW; staticLayer.height = RH;
-    const ctx = staticLayer.getContext('2d');
+  function drawStaticRoom(ctx, bedCount = cast.length) {
     const S = TILES_HOUSE.sprites;
 
     // pared: paneles a escala 4, con papel rasgado y una huella de sangre
@@ -117,7 +118,7 @@
     ctx.restore();
 
     // camas + mesillas
-    const beds = bedLayout();
+    const beds = bedLayoutForCount(bedCount);
     beds.forEach((b, i) => {
       // sombra bajo la cama: el hueco clásico donde algo podría esperar
       ctx.fillStyle = 'rgba(2, 2, 5, 0.85)';
@@ -131,6 +132,13 @@
 
     // vela apagada junto a la puerta
     PixelArt.draw(ctx, S.candle_stand, 0, DOORWAY.x - 24, 92, { scale: 1 });
+  }
+
+  function buildStatic() {
+    staticLayer = document.createElement('canvas');
+    staticLayer.width = RW; staticLayer.height = RH;
+    const ctx = staticLayer.getContext('2d');
+    drawStaticRoom(ctx, cast.length);
   }
 
   // ── ventanas: noche + lluvia DETRÁS del cristal ───────────────
@@ -407,5 +415,16 @@
     onDone = null;
   }
 
+  window.InitialBedroom = {
+    W: RW,
+    H: RH,
+    WALL_H,
+    DOORWAY,
+    WARDROBE,
+    GAP,
+    bedLayout: bedLayoutForCount,
+    drawStaticRoom,
+    drawWindows: (ctx, t = 0) => WINDOWS.forEach((w) => drawWindow(ctx, w, t)),
+  };
   window.Cutscene = { start, stop };
 })();
