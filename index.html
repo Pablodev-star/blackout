@@ -228,6 +228,27 @@
     <p class="screen-hint">datos de ejemplo — se vincularán a Supabase próximamente</p>
   </section>
 
+  <!-- ══════════ GALERÍA DE ASSETS (preview tras abrir un file) ══════════ -->
+  <section id="screen-gallery" class="screen">
+    <header class="screen-header">
+      <button id="gallery-back" class="back-btn" data-goto="solo">‹ volver</button>
+      <h2 class="screen-title">LO QUE HABITA DENTRO</h2>
+    </header>
+    <div class="gallery-scroll">
+      <h3 class="gallery-section-title">LOS SUPERVIVIENTES</h3>
+      <p class="gallery-section-sub">el mismo rostro, cuatro chapas — solo el color os distingue</p>
+      <div id="gallery-players" class="asset-grid asset-grid-chars"></div>
+
+      <h3 class="gallery-section-title danger-title">EL AUSENTE</h3>
+      <p class="gallery-section-sub">a veces patrulla · a veces se esconde · a veces ya es tarde</p>
+      <div id="gallery-monster" class="asset-grid asset-grid-chars"></div>
+
+      <h3 class="gallery-section-title">LA CASA ENCANTADA</h3>
+      <p class="gallery-section-sub">bloques de 16×16 — coloca cada uno en la rejilla y listo</p>
+      <div id="gallery-tiles" class="asset-grid asset-grid-tiles"></div>
+    </div>
+  </section>
+
   <!-- ══════════ OVERLAYS ══════════ -->
   <div id="file-open-overlay" class="overlay" aria-hidden="true">
     <div class="file-open-inner">
@@ -255,6 +276,11 @@
   <script src="js/audio.js"></script>
   <script src="js/fx.js"></script>
   <script src="js/avatars.js"></script>
+  <script src="js/pixel.js"></script>
+  <script src="js/assets/player.js"></script>
+  <script src="js/assets/monster.js"></script>
+  <script src="js/assets/tiles_house.js"></script>
+  <script src="js/gallery.js"></script>
   <script src="js/net.js"></script>
   <script src="js/app.js"></script>
 </body>

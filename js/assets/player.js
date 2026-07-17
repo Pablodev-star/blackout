@@ -1,0 +1,285 @@
+/* ══════════════════════════════════════════════════════════════
+   blackout · assets/player.js
+   El superviviente — 16×24 px, vista top-down 3/4.
+   Cada carácter es un píxel puesto a mano.
+     k contorno   h pelo      H brillo pelo   s piel   S sombra piel
+     e ojo        j chaqueta  J sombra chaq.  p pantalón
+     b bota       B suela     % chapa (color por jugador)  = brillo chapa
+   Direcciones: down (de frente), up (de espaldas), side (izquierda;
+   la derecha es el volteo horizontal). Animación: A · idle · B · idle.
+   ══════════════════════════════════════════════════════════════ */
+(function () {
+  'use strict';
+
+  const PAL = {
+    k: '#14141a',
+    h: '#241a12', H: '#3a2c1e',
+    s: '#d6b39a', S: '#b18d74',
+    e: '#12121c',
+    j: '#3f4656', J: '#2c313d',
+    p: '#262933',
+    b: '#171921', B: '#0d0e13',
+  };
+
+  const DOWN_IDLE = [
+    '....kkkkkkkk....',
+    '..kkhhhhhhhhkk..',
+    '.khhHHhhhhHHhhk.',
+    '.khHhhhhhhhhHhk.',
+    '.khhsssssssshhk.',
+    '.khsssssssssshk.',
+    '.khssessssesshk.',
+    '.khsssssssssshk.',
+    '..kSssssssssSk..',
+    '...kkSSssSSkk...',
+    '..kkjjjjjjjjkk..',
+    '.kjjjjjjjjjjjjk.',
+    '.kjJj%=jjjjjJjk.',
+    '.kjJj%%jjjjjJjk.',
+    '.kjJjjjjjjjjJjk.',
+    '.kjJJjjjjjjJJjk.',
+    '.kskJJJJJJJJksk.',
+    '..kkkkkkkkkkkk..',
+    '...kppppppppk...',
+    '...kpppkkpppk...',
+    '...kppk..kppk...',
+    '...kppk..kppk...',
+    '...kbbk..kbbk...',
+    '..kbBbk..kbBbk..',
+  ];
+
+  // pierna izquierda adelantada, derecha recogida
+  const DOWN_A = [
+    '....kkkkkkkk....',
+    '..kkhhhhhhhhkk..',
+    '.khhHHhhhhHHhhk.',
+    '.khHhhhhhhhhHhk.',
+    '.khhsssssssshhk.',
+    '.khsssssssssshk.',
+    '.khssessssesshk.',
+    '.khsssssssssshk.',
+    '..kSssssssssSk..',
+    '...kkSSssSSkk...',
+    '..kkjjjjjjjjkk..',
+    '.kjjjjjjjjjjjjk.',
+    '.kjJj%=jjjjjJjk.',
+    '.kjJj%%jjjjjJjk.',
+    '.kjJjjjjjjjjJjk.',
+    '.kjJJjjjjjjJJjk.',
+    '.kskJJJJJJJJksk.',
+    '..kkkkkkkkkkkk..',
+    '...kppppppppk...',
+    '...kpppkkpppk...',
+    '...kppk..kppk...',
+    '...kppk..kbbk...',
+    '...kbbk..kbBk...',
+    '..kbBbk...kk....',
+  ];
+
+  // pierna derecha adelantada, izquierda recogida
+  const DOWN_B = [
+    '....kkkkkkkk....',
+    '..kkhhhhhhhhkk..',
+    '.khhHHhhhhHHhhk.',
+    '.khHhhhhhhhhHhk.',
+    '.khhsssssssshhk.',
+    '.khsssssssssshk.',
+    '.khssessssesshk.',
+    '.khsssssssssshk.',
+    '..kSssssssssSk..',
+    '...kkSSssSSkk...',
+    '..kkjjjjjjjjkk..',
+    '.kjjjjjjjjjjjjk.',
+    '.kjJj%=jjjjjJjk.',
+    '.kjJj%%jjjjjJjk.',
+    '.kjJjjjjjjjjJjk.',
+    '.kjJJjjjjjjJJjk.',
+    '.kskJJJJJJJJksk.',
+    '..kkkkkkkkkkkk..',
+    '...kppppppppk...',
+    '...kpppkkpppk...',
+    '...kppk..kppk...',
+    '...kbbk..kppk...',
+    '...kbBk..kbbk...',
+    '....kk...kbBbk..',
+  ];
+
+  const UP_IDLE = [
+    '....kkkkkkkk....',
+    '..kkhhhhhhhhkk..',
+    '.khhhHHhhHHhhhk.',
+    '.khhhhhhhhhhhhk.',
+    '.khHhhhhhhhhHhk.',
+    '.khhhhhhhhhhhhk.',
+    '.khhhhHHHhhhhhk.',
+    '.khhhhhhhhhhhhk.',
+    '..khhhhhhhhhhk..',
+    '...kkSSSSSSkk...',
+    '..kkjjjjjjjjkk..',
+    '.kjjjjjjjjjjjjk.',
+    '.kjJjjjjjjjjJjk.',
+    '.kjJjjJJjjjjJjk.',
+    '.kjJjjjjjJJjJjk.',
+    '.kjJJjjjjjjJJjk.',
+    '.kskJJJJJJJJksk.',
+    '..kkkkkkkkkkkk..',
+    '...kppppppppk...',
+    '...kpppkkpppk...',
+    '...kppk..kppk...',
+    '...kppk..kppk...',
+    '...kbbk..kbbk...',
+    '..kbBbk..kbBbk..',
+  ];
+
+  const UP_A = [
+    '....kkkkkkkk....',
+    '..kkhhhhhhhhkk..',
+    '.khhhHHhhHHhhhk.',
+    '.khhhhhhhhhhhhk.',
+    '.khHhhhhhhhhHhk.',
+    '.khhhhhhhhhhhhk.',
+    '.khhhhHHHhhhhhk.',
+    '.khhhhhhhhhhhhk.',
+    '..khhhhhhhhhhk..',
+    '...kkSSSSSSkk...',
+    '..kkjjjjjjjjkk..',
+    '.kjjjjjjjjjjjjk.',
+    '.kjJjjjjjjjjJjk.',
+    '.kjJjjJJjjjjJjk.',
+    '.kjJjjjjjJJjJjk.',
+    '.kjJJjjjjjjJJjk.',
+    '.kskJJJJJJJJksk.',
+    '..kkkkkkkkkkkk..',
+    '...kppppppppk...',
+    '...kpppkkpppk...',
+    '...kppk..kppk...',
+    '...kppk..kbbk...',
+    '...kbbk..kbBk...',
+    '..kbBbk...kk....',
+  ];
+
+  const UP_B = [
+    '....kkkkkkkk....',
+    '..kkhhhhhhhhkk..',
+    '.khhhHHhhHHhhhk.',
+    '.khhhhhhhhhhhhk.',
+    '.khHhhhhhhhhHhk.',
+    '.khhhhhhhhhhhhk.',
+    '.khhhhHHHhhhhhk.',
+    '.khhhhhhhhhhhhk.',
+    '..khhhhhhhhhhk..',
+    '...kkSSSSSSkk...',
+    '..kkjjjjjjjjkk..',
+    '.kjjjjjjjjjjjjk.',
+    '.kjJjjjjjjjjJjk.',
+    '.kjJjjJJjjjjJjk.',
+    '.kjJjjjjjJJjJjk.',
+    '.kjJJjjjjjjJJjk.',
+    '.kskJJJJJJJJksk.',
+    '..kkkkkkkkkkkk..',
+    '...kppppppppk...',
+    '...kpppkkpppk...',
+    '...kppk..kppk...',
+    '...kbbk..kppk...',
+    '...kbBk..kbbk...',
+    '....kk...kbBbk..',
+  ];
+
+  // Mirando a la IZQUIERDA (perfil). La derecha se genera con flip.
+  const SIDE_IDLE = [
+    '....kkkkkkkk....',
+    '...khhhhhhhhk...',
+    '..khhHHhhhhhhk..',
+    '..khhhhhhhhHhk..',
+    '..khsssshhhhhk..',
+    '..khssssshhhhk..',
+    '..khsesssshhhk..',
+    '..khsssssshhhk..',
+    '...kSssssshhk...',
+    '....kkSSSkkk....',
+    '...kkjjjjjjkk...',
+    '..kjjjjjjjjjjk..',
+    '..kj%=jjJjjjjk..',
+    '..kj%%jjJjjjjk..',
+    '..kjjjjjJjjjjk..',
+    '..kjjjjjJjjjjk..',
+    '..kjjjjkskjjjk..',
+    '...kkkkkkkkkk...',
+    '....kppppppk....',
+    '....kppppppk....',
+    '.....kppppk.....',
+    '.....kppppk.....',
+    '.....kbbbbk.....',
+    '....kbBBbbk.....',
+  ];
+
+  // zancada abierta
+  const SIDE_A = [
+    '....kkkkkkkk....',
+    '...khhhhhhhhk...',
+    '..khhHHhhhhhhk..',
+    '..khhhhhhhhHhk..',
+    '..khsssshhhhhk..',
+    '..khssssshhhhk..',
+    '..khsesssshhhk..',
+    '..khsssssshhhk..',
+    '...kSssssshhk...',
+    '....kkSSSkkk....',
+    '...kkjjjjjjkk...',
+    '..kjjjjjjjjjjk..',
+    '..kj%=jjJjjjjk..',
+    '..kj%%jjJjjjjk..',
+    '..kjjjjjJjjjjk..',
+    '..kjjjjjJjjjjk..',
+    '..kjjjjkskjjjk..',
+    '...kkkkkkkkkk...',
+    '....kppppppk....',
+    '...kpppkppppk...',
+    '..kpppk..kpppk..',
+    '..kppk....kppk..',
+    '..kbbk....kbbk..',
+    '.kbBbk.....kbbk.',
+  ];
+
+  // piernas cruzadas (paso de paso)
+  const SIDE_B = [
+    '....kkkkkkkk....',
+    '...khhhhhhhhk...',
+    '..khhHHhhhhhhk..',
+    '..khhhhhhhhHhk..',
+    '..khsssshhhhhk..',
+    '..khssssshhhhk..',
+    '..khsesssshhhk..',
+    '..khsssssshhhk..',
+    '...kSssssshhk...',
+    '....kkSSSkkk....',
+    '...kkjjjjjjkk...',
+    '..kjjjjjjjjjjk..',
+    '..kj%=jjJjjjjk..',
+    '..kj%%jjJjjjjk..',
+    '..kjjjjjJjjjjk..',
+    '..kjjjjjJjjjjk..',
+    '..kjjjjkskjjjk..',
+    '...kkkkkkkkkk...',
+    '....kppppppk....',
+    '....kppppppk....',
+    '.....kpppkpk....',
+    '....kppkppk.....',
+    '....kbbkkbbk....',
+    '...kbBbk.kbbk...',
+  ];
+
+  function sprite(name, frames) {
+    return PixelArt.validate({ name, w: 16, h: 24, palette: PAL, frames });
+  }
+
+  window.PLAYER = {
+    palette: PAL,
+    down: sprite('player.down', [DOWN_IDLE, DOWN_A, DOWN_B]),
+    up: sprite('player.up', [UP_IDLE, UP_A, UP_B]),
+    side: sprite('player.side', [SIDE_IDLE, SIDE_A, SIDE_B]),
+    // secuencia de andar: A · idle · B · idle (con balanceo de 1px)
+    WALK_SEQ: [{ f: 1, dy: 0 }, { f: 0, dy: 0 }, { f: 2, dy: 0 }, { f: 0, dy: -1 }],
+    IDLE_SEQ: [{ f: 0, dy: 0 }, { f: 0, dy: 0 }, { f: 0, dy: 0 }, { f: 0, dy: -1 }],
+  };
+})();

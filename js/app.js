@@ -22,10 +22,12 @@
     join: $('#screen-join'),
     lobby: $('#screen-lobby'),
     leaderboards: $('#screen-leaderboards'),
+    gallery: $('#screen-gallery'),
   };
 
   function goto(name, { blackout = false } = {}) {
     if (name === currentScreen) return;
+    if (currentScreen === 'gallery' && window.Gallery) Gallery.stop();
     const prev = screens[currentScreen];
     const next = screens[name];
     currentScreen = name;
@@ -215,8 +217,11 @@
       overlay.classList.remove('active');
       overlay.setAttribute('aria-hidden', 'true');
       FX.setEmberMode(0);
-      // TODO: aquí arrancará el juego real con este save.
+      // De momento el file abre la galería de assets del juego;
+      // aquí arrancará el juego real con este save.
       renderSaveFiles();
+      goto('gallery');
+      Gallery.start();
     }, 3400);
   }
 
