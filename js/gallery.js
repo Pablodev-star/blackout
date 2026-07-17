@@ -26,6 +26,7 @@
 
   function startPlayers() {
     const wrap = document.getElementById('gallery-players');
+    if (!wrap) return;
     wrap.innerHTML = '';
     const dirs = [
       { sprite: () => PLAYER.down, flip: false },
@@ -57,6 +58,7 @@
 
   function startMonster() {
     const wrap = document.getElementById('gallery-monster');
+    if (!wrap) return;
     wrap.innerHTML = '';
     const states = [
       { label: 'PATRULLA', sprite: MONSTER.patrol, seq: MONSTER.PATROL_SEQ, fps: 3 },
@@ -74,6 +76,7 @@
 
   function startTiles(containerId, tileset) {
     const wrap = document.getElementById(containerId);
+    if (!wrap || !tileset) return;
     wrap.innerHTML = '';
     for (const [name, sprite] of Object.entries(tileset.sprites)) {
       const c = card(wrap, name.replace(/_/g, ' '), 'tile-card');
@@ -85,6 +88,7 @@
 
   function startItems() {
     const wrap = document.getElementById('gallery-items');
+    if (!wrap) return;
     wrap.innerHTML = '';
     for (const [name, sprite] of Object.entries(ITEMS.sprites)) {
       const c = card(wrap, name.replace(/_/g, ' '), 'tile-card');
@@ -104,14 +108,20 @@
     }
   }
 
+  // cada sección se pinta de forma independiente: si una falla
+  // (p. ej. HTML viejo en caché sin su contenedor), las demás salen
+  function safely(fn) {
+    try { fn(); } catch (e) { console.error('[gallery]', e); }
+  }
+
   function start() {
     stop();
-    startPlayers();
-    startMonster();
-    startItems();
-    startTiles('gallery-tiles', TILES_HOUSE);
-    startTiles('gallery-tiles-infirmary', TILES_INFIRMARY);
-    startTiles('gallery-tiles-school', TILES_SCHOOL);
+    safely(startPlayers);
+    safely(startMonster);
+    safely(startItems);
+    safely(() => startTiles('gallery-tiles', window.TILES_HOUSE));
+    safely(() => startTiles('gallery-tiles-infirmary', window.TILES_INFIRMARY));
+    safely(() => startTiles('gallery-tiles-school', window.TILES_SCHOOL));
   }
 
   function stop() {
