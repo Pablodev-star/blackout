@@ -23,6 +23,7 @@
     lobby: $('#screen-lobby'),
     leaderboards: $('#screen-leaderboards'),
     gallery: $('#screen-gallery'),
+    cutscene: $('#screen-cutscene'),
   };
 
   function goto(name, { blackout = false } = {}) {
@@ -227,10 +228,7 @@
       overlay.classList.remove('active');
       overlay.setAttribute('aria-hidden', 'true');
       FX.setEmberMode(0);
-      // De momento el file abre la galería de assets del juego;
-      // aquí arrancará el juego real con este save.
-      goto('gallery');
-      try { Gallery.start(); } catch (e) { console.error('[gallery]', e); }
+      startInitialCutscene([{ name: player?.name || 'tú' }]);
       renderSaveFiles();
     }, 3400);
   }
@@ -481,12 +479,17 @@
     $('#transition-layer').classList.remove('blackout');
     void $('#transition-layer').offsetWidth;
     $('#transition-layer').classList.add('blackout');
-    // De momento la partida multijugador abre la galería de assets;
-    // aquí arrancará la partida real.
+    const players = room?.state?.players || [{ name: player?.name || 'tú' }];
     setTimeout(() => {
-      goto('gallery');
-      try { Gallery.start(); } catch (e) { console.error('[gallery]', e); }
+      startInitialCutscene(players);
     }, 700);
+  }
+
+  function startInitialCutscene(players) {
+    goto('cutscene', { blackout: true });
+    setTimeout(() => {
+      try { Cutscene.start({ players }); } catch (e) { console.error('[cutscene]', e); }
+    }, 260);
   }
 
   // ══════════ LEADERBOARDS ══════════

@@ -269,6 +269,61 @@
     '...kbBbk.kbbk...',
   ];
 
+  // Tumbado de lado para la cutscene inicial: respiración lenta al dormir.
+  const SLEEP_IDLE = [
+    '................',
+    '................',
+    '..kkkkkkkkkk....',
+    '.khhhhhhhhhhk...',
+    '.khhHHhhhhHhk...',
+    '.khsssssssssk...',
+    '.khssessssssk...',
+    '..kssssssssk....',
+    '...kkSSSSkk.....',
+    '..kkjjjjjjkk....',
+    '.kjjj%=jjjjjk...',
+    '.kjJj%%jjjJjk...',
+    '.kjJJjjjjJJjk...',
+    '..kkkkkkkkkk....',
+    '...kppppppk.....',
+    '..kpppkkpppk....',
+    '..kbbk..kbbk....',
+    '.kbBbk..kbBbk...',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+  ];
+
+  const SLEEP_BREATHE = [
+    '................',
+    '..kkkkkkkkkk....',
+    '.khhhhhhhhhhk...',
+    '.khhHHhhhhHhk...',
+    '.khsssssssssk...',
+    '.khssessssssk...',
+    '..kssssssssk....',
+    '...kkSSSSkk.....',
+    '..kkjjjjjjkk....',
+    '.kjjj%=jjjjjk...',
+    '.kjJj%%jjjJjk...',
+    '.kjJJjjjjJJjk...',
+    '..kkkkkkkkkk....',
+    '...kppppppk.....',
+    '..kpppkkpppk....',
+    '..kbbk..kbbk....',
+    '.kbBbk..kbBbk...',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+  ];
+
   function sprite(name, frames) {
     return PixelArt.validate({ name, w: 16, h: 24, palette: PAL, frames });
   }
@@ -278,8 +333,10 @@
     down: sprite('player.down', [DOWN_IDLE, DOWN_A, DOWN_B]),
     up: sprite('player.up', [UP_IDLE, UP_A, UP_B]),
     side: sprite('player.side', [SIDE_IDLE, SIDE_A, SIDE_B]),
+    sleep: sprite('player.sleep', [SLEEP_IDLE, SLEEP_BREATHE]),
     // secuencia de andar: A · idle · B · idle (con balanceo de 1px)
     WALK_SEQ: [{ f: 1, dy: 0 }, { f: 0, dy: 0 }, { f: 2, dy: 0 }, { f: 0, dy: -1 }],
     IDLE_SEQ: [{ f: 0, dy: 0 }, { f: 0, dy: 0 }, { f: 0, dy: 0 }, { f: 0, dy: -1 }],
+    SLEEP_SEQ: [{ f: 0, dy: 0 }, { f: 1, dy: 0 }, { f: 0, dy: 0 }, { f: 1, dy: 0 }],
   };
 })();
