@@ -99,9 +99,33 @@ const Backend = (() => {
     }
 
     const sb = getClient();
-    if (!sb) throw new Error('Supabase no está disponible en esta página');
-    const { data, error } = await sb.rpc('claim_player_name', payload);
-    if (error) throw error;
+    if (!sb) {
+      // sin cliente Supabase (p. ej. script bloqueado): alta local provisional
+      console.warn('[Backend] Supabase no disponible; alta local provisional');
+      return { ok: true, pending: true, player: { name: payload.p_name, deviceId } };
+    }
+    let data, error;
+    try {
+      // si la red no responde en 6 s no dejamos al jugador colgado
+      const rpc = sb.rpc('claim_player_name', payload);
+      ({ data, error } = await Promise.race([
+        rpc,
+        new Promise((_, rej) => setTimeout(() => rej(new Error('__timeout__')), 6000)),
+      ]));
+    } catch (netErr) {
+      // fallo de RED (timeout, sin conexión): entrar en local y sincronizar
+      // más tarde. Solo un rechazo real del servidor bloquea el nombre.
+      console.warn('[Backend] Sin conexión con Supabase; alta local provisional:', netErr?.message);
+      return { ok: true, pending: true, player: { name: payload.p_name, deviceId } };
+    }
+    if (error) {
+      const msg = String(error.message || error);
+      if (/fetch|network|Failed to|timeout|abort/i.test(msg)) {
+        console.warn('[Backend] Error de red con Supabase; alta local provisional:', msg);
+        return { ok: true, pending: true, player: { name: payload.p_name, deviceId } };
+      }
+      throw error;
+    }
     const row = Array.isArray(data) ? data[0] : data;
     if (!row?.allowed) throw new Error(row?.reason || 'ese nombre ya está ligado a otro dispositivo');
     return { ok: true, player: { name: row.name, deviceId: row.device_id, createdAt: row.created_at, updatedAt: row.updated_at } };
