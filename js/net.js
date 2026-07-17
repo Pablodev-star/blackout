@@ -16,6 +16,10 @@ const Net = (() => {
   const sb = () => Backend.getClient?.();
   const useSupabase = () => Boolean(sb());
 
+  async function cleanupEmptyRooms() {
+    try { await sb()?.rpc('cleanup_empty_rooms'); } catch (err) { console.warn('[Net] limpieza salas:', err); }
+  }
+
   class RealtimeRoomSession {
     constructor({ roomRow, player, isHost, events }) {
       this.roomId = roomRow.id;
@@ -37,14 +41,16 @@ const Net = (() => {
 
     async start() {
       await this.channel.subscribe();
+      await cleanupEmptyRooms();
       await this.refreshState();
-      this.heartbeat = setInterval(() => this.touchPresence(), 5000);
+      this.heartbeat = setInterval(() => this.touchPresence(), 10000);
       return this;
     }
 
     async touchPresence() {
       if (this.closed) return;
       await sb().from('room_players').update({ last_seen_at: new Date().toISOString() }).eq('session_id', this.selfId);
+      await cleanupEmptyRooms();
     }
 
     async refreshState() {
@@ -109,10 +115,11 @@ const Net = (() => {
     async leave() {
       if (this.closed) return;
       if (this.isHost) {
-        await sb().from('rooms').update({ status: 'closed' }).eq('id', this.roomId);
         await this.emit('room-closed');
+        await sb().from('rooms').delete().eq('id', this.roomId);
       } else {
         await sb().from('room_players').delete().eq('session_id', this.selfId);
+        await cleanupEmptyRooms();
       }
       this.close(null, true);
     }
@@ -129,6 +136,7 @@ const Net = (() => {
 
   async function createRoom({ roomName, maxPlayers, player, events }) {
     if (!useSupabase()) return LocalNet.createRoom({ roomName, maxPlayers, player, events });
+    await cleanupEmptyRooms();
     const linkedPlayer = await Backend.requirePlayerProfile(player);
     const code = generateCode();
     const { data: roomRow, error } = await sb().from('rooms').insert({ code, name: roomName, max_players: maxPlayers, host_device_id: linkedPlayer.deviceId }).select().single();
@@ -141,6 +149,7 @@ const Net = (() => {
 
   async function joinRoom({ code, player, events }) {
     if (!useSupabase()) return LocalNet.joinRoom({ code, player, events });
+    await cleanupEmptyRooms();
     const linkedPlayer = await Backend.requirePlayerProfile(player);
     const normalized = code.trim().toUpperCase();
     const { data: roomRows, error } = await sb().from('rooms').select('*').eq('code', normalized).in('status', ['waiting', 'countdown']).limit(1);

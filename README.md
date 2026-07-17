@@ -46,9 +46,9 @@ no se guarda en el frontend.
    `fqcuhetsqwobuxuocwub`.
 2. Copia todo el contenido de `supabase/blackout_schema.sql`.
 3. Pégalo en una consulta nueva y pulsa **Run**.
-4. Al final debe aparecer una consulta de verificación con estas 7 tablas:
-   `leaderboards`, `player_devices`, `player_states`, `players`,
-   `room_events`, `room_players` y `rooms`, además de la función
+4. Al final debe aparecer una consulta de verificación con estas 6 tablas:
+   `leaderboards`, `player_devices`, `players`, `room_events`,
+   `room_players` y `rooms`, además de la función
    `claim_player_name`.
 
 `supabase/blackout_schema.sql` y
@@ -78,8 +78,9 @@ no, el script usa `fqcuhetsqwobuxuocwub`.
   ASN/proveedor de internet. IP, puerto y cabeceras se capturan en la función
   SQL `claim_player_name()` desde la petición que recibe Supabase.
 - `leaderboards`: rankings por `times`, `survival` y `credits`.
-- `rooms`, `room_players`, `player_states` y `room_events`: lobby, presencia,
-  acciones y sincronización Realtime del multijugador.
+- `rooms`, `room_players` y `room_events`: lobby, presencia, acciones y
+  sincronización Realtime del multijugador. Las salas vacías/cerradas se
+  limpian para liberar el código de sala.
 
 La regla de nombres es: si el nombre existe y el `deviceId` coincide, el
 jugador vuelve a entrar; si el mismo nombre viene de otro dispositivo, se

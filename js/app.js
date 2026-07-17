@@ -343,7 +343,7 @@
     const selfId = state.selfId || room?.selfId;
     state.players.forEach((p) => {
       const card = document.createElement('div');
-      card.className = `player-card ${p.ready ? 'ready' : ''}`;
+      card.className = `player-card ${p.ready ? 'ready' : ''} ${prevIds.has(p.id) ? 'no-join-anim' : ''}`;
       card.dataset.id = p.id;
       if (prevIds.size && !prevIds.has(p.id)) GameAudio.stinger(true);
       card.innerHTML = `
