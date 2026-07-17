@@ -26,18 +26,17 @@ const Storage = (() => {
     return read(KEYS.player);
   }
 
-  function savePlayerName(name) {
+  async function savePlayerName(name) {
     const existing = getPlayer();
+    const claimed = await Backend.claimPlayerName(name, existing?.deviceId);
+    const now = new Date().toISOString();
     const player = {
-      name: name.trim(),
-      deviceId: existing?.deviceId || crypto.randomUUID(),
-      createdAt: existing?.createdAt || new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      name: claimed.player.name,
+      deviceId: claimed.player.deviceId,
+      createdAt: claimed.player.createdAt || existing?.createdAt || now,
+      updatedAt: claimed.player.updatedAt || now,
     };
     write(KEYS.player, player);
-    // Sincronización remota (no bloquea la UI; es un stub hasta
-    // que se configure Supabase en js/config.js).
-    Backend.syncPlayerProfile(player);
     return player;
   }
 
