@@ -36,34 +36,27 @@ create table if not exists public.players (
   last_seen_at timestamptz not null default now()
 );
 
-create table if not exists public.player_devices (
-  id uuid primary key default gen_random_uuid(),
-  player_device_id uuid not null references public.players(device_id) on delete cascade,
-  device_info jsonb not null default '{}'::jsonb,
-  ip inet,
-  port integer,
-  country text,
-  region text,
-  city text,
-  user_agent text,
-  screen_w integer,
-  screen_h integer,
-  viewport_w integer,
-  viewport_h integer,
-  device_pixel_ratio numeric,
-  cookie_enabled boolean,
-  first_party_cookie_writeable boolean,
-  cookie_string_present boolean,
-  timezone text,
-  platform text,
-  connection_type text,
-  effective_connection_type text,
-  downlink_mbps numeric,
-  rtt_ms integer,
-  isp_asn text,
-  isp_org text,
-  seen_at timestamptz not null default now()
-);
+-- Device metadata is stored once on public.players; no separate device history table.
+drop table if exists public.player_devices cascade;
+
+
+alter table public.players add column if not exists screen_w integer;
+alter table public.players add column if not exists screen_h integer;
+alter table public.players add column if not exists viewport_w integer;
+alter table public.players add column if not exists viewport_h integer;
+alter table public.players add column if not exists device_pixel_ratio numeric;
+alter table public.players add column if not exists cookie_enabled boolean;
+alter table public.players add column if not exists first_party_cookie_writeable boolean;
+alter table public.players add column if not exists cookie_string_present boolean;
+alter table public.players add column if not exists timezone text;
+alter table public.players add column if not exists platform text;
+alter table public.players add column if not exists connection_type text;
+alter table public.players add column if not exists effective_connection_type text;
+alter table public.players add column if not exists downlink_mbps numeric;
+alter table public.players add column if not exists rtt_ms integer;
+alter table public.players add column if not exists isp_asn text;
+alter table public.players add column if not exists isp_org text;
+
 
 
 alter table public.players add column if not exists screen_w integer;
@@ -160,7 +153,6 @@ create table if not exists public.room_events (
 );
 
 alter table public.players enable row level security;
-alter table public.player_devices enable row level security;
 alter table public.leaderboards enable row level security;
 alter table public.rooms enable row level security;
 alter table public.room_players enable row level security;
@@ -168,7 +160,6 @@ alter table public.room_events enable row level security;
 
 grant usage on schema public to anon, authenticated;
 grant select, insert, update on public.players to anon, authenticated;
-grant insert on public.player_devices to anon, authenticated;
 grant select, insert on public.leaderboards to anon, authenticated;
 grant select, insert, update on public.rooms to anon, authenticated;
 grant select, insert, update, delete on public.room_players to anon, authenticated;
@@ -184,8 +175,6 @@ drop policy if exists "public players insert" on public.players;
 create policy "public players insert" on public.players for insert with check (true);
 drop policy if exists "public players update" on public.players;
 create policy "public players update" on public.players for update using (true) with check (true);
-drop policy if exists "public player devices insert" on public.player_devices;
-create policy "public player devices insert" on public.player_devices for insert with check (true);
 
 drop policy if exists "public leaderboard read" on public.leaderboards;
 create policy "public leaderboard read" on public.leaderboards for select using (true);
@@ -256,75 +245,9 @@ begin
   )
   on conflict on constraint players_pkey do update set
     name = excluded.name,
-    device_info = excluded.device_info,
-    last_ip = excluded.last_ip,
-    last_port = excluded.last_port,
-    last_country = excluded.last_country,
-    last_region = excluded.last_region,
-    last_city = excluded.last_city,
-    last_language = excluded.last_language,
-    last_user_agent = excluded.last_user_agent,
-    screen_w = excluded.screen_w,
-    screen_h = excluded.screen_h,
-    viewport_w = excluded.viewport_w,
-    viewport_h = excluded.viewport_h,
-    device_pixel_ratio = excluded.device_pixel_ratio,
-    cookie_enabled = excluded.cookie_enabled,
-    first_party_cookie_writeable = excluded.first_party_cookie_writeable,
-    cookie_string_present = excluded.cookie_string_present,
-    timezone = excluded.timezone,
-    platform = excluded.platform,
-    connection_type = excluded.connection_type,
-    effective_connection_type = excluded.effective_connection_type,
-    downlink_mbps = excluded.downlink_mbps,
-    rtt_ms = excluded.rtt_ms,
-    isp_asn = excluded.isp_asn,
-    isp_org = excluded.isp_org,
     updated_at = now(),
     last_seen_at = now();
 
-  insert into public.player_devices(
-    player_device_id, device_info, ip, port, country, region, city, user_agent,
-    screen_w, screen_h, viewport_w, viewport_h, device_pixel_ratio, cookie_enabled, first_party_cookie_writeable,
-    cookie_string_present, timezone, platform, connection_type, effective_connection_type, downlink_mbps, rtt_ms,
-    isp_asn, isp_org
-  )
-  values (
-    p_device_id, p_device_info, nullif(ip_text, '')::inet, nullif(port_text, '')::integer,
-    headers->>'cf-ipcountry', headers->>'x-vercel-ip-country-region', headers->>'x-vercel-ip-city', p_device_info->>'user_agent',
-    nullif(p_device_info->>'screen_w', '')::integer, nullif(p_device_info->>'screen_h', '')::integer,
-    nullif(p_device_info->>'viewport_w', '')::integer, nullif(p_device_info->>'viewport_h', '')::integer,
-    nullif(p_device_info->>'device_pixel_ratio', '')::numeric, nullif(p_device_info->>'cookie_enabled', '')::boolean,
-    nullif(p_device_info->>'first_party_cookie_writeable', '')::boolean, nullif(p_device_info->>'cookie_string_present', '')::boolean,
-    p_device_info->>'timezone', p_device_info->>'platform', p_device_info->>'connection_type',
-    p_device_info->>'effective_connection_type', nullif(p_device_info->>'downlink_mbps', '')::numeric,
-    nullif(p_device_info->>'rtt_ms', '')::integer, isp_asn_text, isp_org_text
-  )
-  on conflict (player_device_id) do update set
-    device_info = excluded.device_info,
-    ip = excluded.ip,
-    port = excluded.port,
-    country = excluded.country,
-    region = excluded.region,
-    city = excluded.city,
-    user_agent = excluded.user_agent,
-    screen_w = excluded.screen_w,
-    screen_h = excluded.screen_h,
-    viewport_w = excluded.viewport_w,
-    viewport_h = excluded.viewport_h,
-    device_pixel_ratio = excluded.device_pixel_ratio,
-    cookie_enabled = excluded.cookie_enabled,
-    first_party_cookie_writeable = excluded.first_party_cookie_writeable,
-    cookie_string_present = excluded.cookie_string_present,
-    timezone = excluded.timezone,
-    platform = excluded.platform,
-    connection_type = excluded.connection_type,
-    effective_connection_type = excluded.effective_connection_type,
-    downlink_mbps = excluded.downlink_mbps,
-    rtt_ms = excluded.rtt_ms,
-    isp_asn = excluded.isp_asn,
-    isp_org = excluded.isp_org,
-    seen_at = now();
 
   return query select true, null::text, p.device_id, p.name, p.created_at, p.updated_at from public.players as p where p.device_id = claim_player_name.p_device_id;
 end;

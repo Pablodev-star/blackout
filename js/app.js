@@ -338,21 +338,33 @@
 
     const wrap = $('#lobby-players');
     const prevIds = new Set(Array.from(wrap.querySelectorAll('.player-card')).map((c) => c.dataset.id));
-    wrap.innerHTML = '';
+    const currentIds = new Set(state.players.map((p) => p.id));
+    wrap.querySelectorAll('.player-slot-empty').forEach((slot) => slot.remove());
+    wrap.querySelectorAll('.player-card').forEach((card) => {
+      if (!currentIds.has(card.dataset.id)) card.remove();
+    });
 
     const selfId = state.selfId || room?.selfId;
     state.players.forEach((p) => {
-      const card = document.createElement('div');
-      card.className = `player-card ${p.ready ? 'ready' : ''} ${prevIds.has(p.id) ? 'no-join-anim' : ''}`;
-      card.dataset.id = p.id;
-      if (prevIds.size && !prevIds.has(p.id)) GameAudio.stinger(true);
+      let card = Array.from(wrap.querySelectorAll('.player-card')).find((el) => el.dataset.id === p.id);
+      const isNew = !card;
+      if (!card) {
+        card = document.createElement('div');
+        card.className = 'player-card';
+        card.dataset.id = p.id;
+        if (prevIds.size) GameAudio.stinger(true);
+        wrap.appendChild(card);
+      } else {
+        card.classList.add('no-join-anim');
+      }
+      card.classList.toggle('ready', p.ready);
+      card.classList.toggle('no-join-anim', !isNew);
       card.innerHTML = `
         <div class="player-face">${Avatars.faceSVG(p.name)}</div>
         <span class="player-name">${escapeHTML(p.name)}${p.id === selfId ? ' (tú)' : ''}</span>
         <span class="player-badge ${p.isHost ? 'host-badge' : ''}">
           ${p.ready ? '✓ LISTO' : p.isHost ? '♛ ANFITRIÓN' : 'esperando'}
         </span>`;
-      wrap.appendChild(card);
     });
 
     for (let i = state.players.length; i < state.maxPlayers; i++) {

@@ -100,7 +100,17 @@ const Net = (() => {
 
     async hostCheckAllReady() {
       const ps = this.state?.players || [];
-      if (ps.length < 2 || !ps.every((p) => p.ready) || this.state.countdown) return;
+      const allReady = ps.length >= 1 && ps.every((p) => p.ready);
+      if (this.state?.countdown && !allReady) {
+        clearTimeout(this.countdownTimer);
+        this.countdownTimer = null;
+        await sb().from('rooms').update({ countdown_started_at: null, status: 'waiting' }).eq('id', this.roomId);
+        await this.emit('countdown-cancel', { reason: 'alguien quitó listo' });
+        this.events.onCountdownCancel?.('alguien quitó listo');
+        await this.refreshState();
+        return;
+      }
+      if (!allReady || this.state?.countdown) return;
       const started = new Date().toISOString();
       await sb().from('rooms').update({ countdown_started_at: started, status: 'countdown' }).eq('id', this.roomId);
       await this.emit('countdown-start');

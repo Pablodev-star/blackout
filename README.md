@@ -46,9 +46,9 @@ no se guarda en el frontend.
    `fqcuhetsqwobuxuocwub`.
 2. Copia todo el contenido de `supabase/blackout_schema.sql`.
 3. Pégalo en una consulta nueva y pulsa **Run**.
-4. Al final debe aparecer una consulta de verificación con estas 6 tablas:
-   `leaderboards`, `player_devices`, `players`, `room_events`,
-   `room_players` y `rooms`, además de la función
+4. Al final debe aparecer una consulta de verificación con estas 5 tablas:
+   `leaderboards`, `players`, `room_events`, `room_players` y
+   `rooms`, además de la función
    `claim_player_name`.
 
 `supabase/blackout_schema.sql` y
@@ -72,9 +72,9 @@ no, el script usa `fqcuhetsqwobuxuocwub`.
 
 ### Objetos creados
 
-- `players` y `player_devices`: nombre único por dispositivo y telemetría útil
-  accesible desde navegador, incluyendo resolución/viewport, cookies,
-  zona horaria, plataforma, conexión y, si Supabase/CDN lo expone en headers,
+- `players`: nombre único por dispositivo y telemetría útil guardada una sola
+  vez al crear el usuario, incluyendo resolución/viewport, cookies, zona
+  horaria, plataforma, conexión y, si Supabase/CDN lo expone en headers,
   ASN/proveedor de internet. IP, puerto y cabeceras se capturan en la función
   SQL `claim_player_name()` desde la petición que recibe Supabase.
 - `leaderboards`: rankings por `times`, `survival` y `credits`.
@@ -88,6 +88,8 @@ rechaza.
 
 ### Solución de problemas
 
+- Si ya existe `player_devices` en Supabase, ejecuta el SQL actualizado: la
+  tabla se elimina porque ya no se guarda historial de dispositivos.
 - Si al ejecutar el SQL aparece una tabla con la columna `routine_name` y el
   valor `claim_player_name`, eso es correcto: es la verificación final de que
   la función RPC existe.
