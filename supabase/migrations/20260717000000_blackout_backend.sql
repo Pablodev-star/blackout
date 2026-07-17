@@ -1,4 +1,5 @@
 -- BLACKOUT backend schema: usernames, device telemetry, leaderboards and realtime rooms.
+-- Idempotent: safe to run from the Supabase SQL editor more than once.
 
 create extension if not exists pgcrypto;
 
@@ -100,18 +101,41 @@ alter table public.room_players enable row level security;
 alter table public.player_states enable row level security;
 alter table public.room_events enable row level security;
 
+grant usage on schema public to anon, authenticated;
+grant select, insert, update on public.players to anon, authenticated;
+grant insert on public.player_devices to anon, authenticated;
+grant select, insert on public.leaderboards to anon, authenticated;
+grant select, insert, update on public.rooms to anon, authenticated;
+grant select, insert, update, delete on public.room_players to anon, authenticated;
+grant select, insert, update, delete on public.player_states to anon, authenticated;
+grant select, insert on public.room_events to anon, authenticated;
+grant usage, select on sequence public.room_events_id_seq to anon, authenticated;
+
+drop policy if exists "public leaderboard read" on public.leaderboards;
 create policy "public leaderboard read" on public.leaderboards for select using (true);
+drop policy if exists "public leaderboard insert" on public.leaderboards;
 create policy "public leaderboard insert" on public.leaderboards for insert with check (true);
+drop policy if exists "public rooms read" on public.rooms;
 create policy "public rooms read" on public.rooms for select using (true);
+drop policy if exists "public rooms insert" on public.rooms;
 create policy "public rooms insert" on public.rooms for insert with check (true);
+drop policy if exists "public rooms update" on public.rooms;
 create policy "public rooms update" on public.rooms for update using (true) with check (true);
+drop policy if exists "public room players read" on public.room_players;
 create policy "public room players read" on public.room_players for select using (true);
+drop policy if exists "public room players insert" on public.room_players;
 create policy "public room players insert" on public.room_players for insert with check (true);
+drop policy if exists "public room players update" on public.room_players;
 create policy "public room players update" on public.room_players for update using (true) with check (true);
+drop policy if exists "public room players delete" on public.room_players;
 create policy "public room players delete" on public.room_players for delete using (true);
+drop policy if exists "public states read" on public.player_states;
 create policy "public states read" on public.player_states for select using (true);
+drop policy if exists "public states upsert" on public.player_states;
 create policy "public states upsert" on public.player_states for all using (true) with check (true);
+drop policy if exists "public events read" on public.room_events;
 create policy "public events read" on public.room_events for select using (true);
+drop policy if exists "public events insert" on public.room_events;
 create policy "public events insert" on public.room_events for insert with check (true);
 
 create or replace function public.claim_player_name(p_name text, p_device_id uuid, p_device_info jsonb default '{}'::jsonb)
@@ -165,10 +189,35 @@ $$;
 
 grant execute on function public.claim_player_name(text, uuid, jsonb) to anon, authenticated;
 
-alter publication supabase_realtime add table public.rooms;
-alter publication supabase_realtime add table public.room_players;
-alter publication supabase_realtime add table public.player_states;
-alter publication supabase_realtime add table public.room_events;
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'rooms'
+  ) then
+    alter publication supabase_realtime add table public.rooms;
+  end if;
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'room_players'
+  ) then
+    alter publication supabase_realtime add table public.room_players;
+  end if;
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'player_states'
+  ) then
+    alter publication supabase_realtime add table public.player_states;
+  end if;
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'room_events'
+  ) then
+    alter publication supabase_realtime add table public.room_events;
+  end if;
+end;
+$$;
+
 alter table public.rooms replica identity full;
 alter table public.room_players replica identity full;
 alter table public.player_states replica identity full;
