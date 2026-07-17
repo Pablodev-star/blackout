@@ -219,9 +219,9 @@
       FX.setEmberMode(0);
       // De momento el file abre la galería de assets del juego;
       // aquí arrancará el juego real con este save.
-      renderSaveFiles();
       goto('gallery');
-      Gallery.start();
+      try { Gallery.start(); } catch (e) { console.error('[gallery]', e); }
+      renderSaveFiles();
     }, 3400);
   }
 
@@ -454,8 +454,12 @@
     $('#transition-layer').classList.remove('blackout');
     void $('#transition-layer').offsetWidth;
     $('#transition-layer').classList.add('blackout');
-    // TODO: aquí arrancará la partida multijugador real.
-    $('#lobby-status').textContent = '🩸 LA PARTIDA COMENZARÍA AQUÍ (próximamente)';
+    // De momento la partida multijugador abre la galería de assets;
+    // aquí arrancará la partida real.
+    setTimeout(() => {
+      goto('gallery');
+      try { Gallery.start(); } catch (e) { console.error('[gallery]', e); }
+    }, 700);
   }
 
   // ══════════ LEADERBOARDS ══════════

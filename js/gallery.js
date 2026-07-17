@@ -72,10 +72,10 @@
     }
   }
 
-  function startTiles() {
-    const wrap = document.getElementById('gallery-tiles');
+  function startTiles(containerId, tileset) {
+    const wrap = document.getElementById(containerId);
     wrap.innerHTML = '';
-    for (const [name, sprite] of Object.entries(TILES_HOUSE.sprites)) {
+    for (const [name, sprite] of Object.entries(tileset.sprites)) {
       const c = card(wrap, name.replace(/_/g, ' '), 'tile-card');
       const cv = PixelArt.toCanvas(sprite, 0, { scale: 4 });
       cv.className = 'pixel-canvas';
@@ -87,7 +87,9 @@
     stop();
     startPlayers();
     startMonster();
-    startTiles();
+    startTiles('gallery-tiles', TILES_HOUSE);
+    startTiles('gallery-tiles-infirmary', TILES_INFIRMARY);
+    startTiles('gallery-tiles-school', TILES_SCHOOL);
   }
 
   function stop() {
