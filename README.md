@@ -41,7 +41,20 @@ El proyecto está vinculado en `js/config.js` al Project ID
 no se guarda en el frontend.
 
 Aplica `supabase/migrations/20260717000000_blackout_backend.sql` en Supabase
-para crear:
+para crear las tablas. La migración es idempotente: puedes ejecutarla otra vez
+si el proyecto quedó a medias o si Supabase no mostraba las tablas.
+
+Opciones de aplicación:
+
+```bash
+# Con un token personal de Supabase (Account > Access Tokens)
+SUPABASE_ACCESS_TOKEN=sbp_... node scripts/apply-supabase-schema.mjs
+```
+
+O pega el contenido del archivo SQL en **Supabase Dashboard > SQL Editor** y
+ejecútalo sobre el proyecto `fqcuhetsqwobuxuocwub`.
+
+La migración crea:
 
 - `players` y `player_devices`: nombre único por dispositivo y telemetría útil
   accesible desde navegador. IP, puerto y cabeceras se capturan en la función
