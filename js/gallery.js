@@ -83,10 +83,32 @@
     }
   }
 
+  function startItems() {
+    const wrap = document.getElementById('gallery-items');
+    wrap.innerHTML = '';
+    for (const [name, sprite] of Object.entries(ITEMS.sprites)) {
+      const c = card(wrap, name.replace(/_/g, ' '), 'tile-card');
+      if (name === 'flashlight_on') {
+        stops.push(PixelArt.animate(c.canvas, {
+          sprite, sequence: ITEMS.FLASHLIGHT_SEQ, fps: 9, scale: 4,
+        }));
+      } else if (name === 'coin') {
+        stops.push(PixelArt.animate(c.canvas, {
+          sprite, sequence: ITEMS.COIN_SEQ, fps: 7, scale: 4,
+        }));
+      } else {
+        const cv = PixelArt.toCanvas(sprite, 0, { scale: 4 });
+        cv.className = 'pixel-canvas';
+        c.el.replaceChild(cv, c.canvas);
+      }
+    }
+  }
+
   function start() {
     stop();
     startPlayers();
     startMonster();
+    startItems();
     startTiles('gallery-tiles', TILES_HOUSE);
     startTiles('gallery-tiles-infirmary', TILES_INFIRMARY);
     startTiles('gallery-tiles-school', TILES_SCHOOL);
