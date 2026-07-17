@@ -94,17 +94,27 @@
 
   // ══════════ ENTRADA DE NOMBRE ══════════
 
-  function submitName() {
+  async function submitName() {
     const input = $('#name-input');
     const name = input.value.trim();
     if (name.length < 2) {
       showError($('#name-error'), 'la oscuridad necesita al menos 2 letras…');
       return;
     }
-    player = Storage.savePlayerName(name);
-    GameAudio.slam();
-    FX.bloodPulse();
-    goto('menu', { blackout: true });
+    const btn = $('#name-submit');
+    btn.disabled = true;
+    btn.querySelector('.btn-label').textContent = 'COMPROBANDO…';
+    try {
+      player = await Storage.savePlayerName(name);
+      GameAudio.slam();
+      FX.bloodPulse();
+      goto('menu', { blackout: true });
+    } catch (err) {
+      showError($('#name-error'), err.message || 'no se pudo reservar ese nombre');
+    } finally {
+      btn.disabled = false;
+      btn.querySelector('.btn-label').textContent = 'FIRMAR EL PACTO';
+    }
   }
 
   $('#name-submit').addEventListener('click', submitName);
@@ -242,20 +252,24 @@
     });
   });
 
-  $('#create-room-btn').addEventListener('click', () => {
+  $('#create-room-btn').addEventListener('click', async () => {
     const roomName = $('#room-name-input').value.trim();
     if (roomName.length < 2) {
       showError($('#create-error'), 'toda sala necesita un nombre…');
       return;
     }
     GameAudio.slam();
-    room = Net.createRoom({
-      roomName,
-      maxPlayers: selectedMax,
-      player,
-      events: lobbyEvents(),
-    });
-    enterLobby();
+    try {
+      room = await Net.createRoom({
+        roomName,
+        maxPlayers: selectedMax,
+        player,
+        events: lobbyEvents(),
+      });
+      enterLobby();
+    } catch (err) {
+      showError($('#create-error'), err.message || 'no se pudo crear la sala');
+    }
   });
 
   // ══════════ UNIRSE A SALA ══════════

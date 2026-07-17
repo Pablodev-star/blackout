@@ -1,17 +1,9 @@
 /* ══════════════════════════════════════════════════════════════
-   BLACKOUT — capa de red del multijugador
-
-   Implementación actual: BroadcastChannel — las salas funcionan
-   de verdad entre pestañas/ventanas del mismo navegador, ideal
-   para desarrollar y probar el lobby.
-
-   La interfaz (createRoom / joinRoom / setReady / leave + eventos)
-   está pensada para sustituir el transporte por Supabase Realtime
-   sin tocar la UI: sólo habrá que reimplementar este módulo.
+   BLACKOUT — capa de red del multijugador (Supabase Realtime)
    ══════════════════════════════════════════════════════════════ */
 
 const Net = (() => {
-  const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // sin caracteres ambiguos
+  const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
   function generateCode() {
     let code = '';
@@ -21,158 +13,105 @@ const Net = (() => {
     return code;
   }
 
-  /**
-   * Sesión de sala compartida por host y clientes.
-   * events: onState, onCountdownStart, onCountdownCancel,
-   *         onGameStart, onClosed
-   */
-  class RoomSession {
-    constructor({ code, player, isHost, roomName, maxPlayers, events }) {
-      this.code = code;
+  const sb = () => Backend.getClient?.();
+  const useSupabase = () => Boolean(sb());
+
+  class RealtimeRoomSession {
+    constructor({ roomRow, player, isHost, events }) {
+      this.roomId = roomRow.id;
+      this.code = roomRow.code;
       this.isHost = isHost;
       this.events = events || {};
-      this.selfId = crypto.randomUUID(); // id por pestaña (permite probar en local)
+      this.selfId = crypto.randomUUID();
       this.self = { id: this.selfId, deviceId: player.deviceId, name: player.name };
+      this.state = null;
       this.closed = false;
       this.countdownTimer = null;
-
-      this.state = isHost
-        ? {
-            code,
-            name: roomName,
-            maxPlayers,
-            players: [{ ...this.self, ready: false, isHost: true }],
-            countdown: null, // { startedAt } cuando está en marcha
-          }
-        : null;
-
-      this.channel = new BroadcastChannel(`blackout-room-${code}`);
-      this.channel.onmessage = (e) => this.onMessage(e.data);
-
-      if (isHost) {
-        this.heartbeat = setInterval(() => this.broadcastState(), 2000);
-      } else {
-        this.lastStateAt = Date.now();
-        this.watchdog = setInterval(() => {
-          if (Date.now() - this.lastStateAt > 6000) this.close('la sala se ha desvanecido');
-        }, 1500);
-      }
-
+      this.channel = sb().channel(`blackout-room-${this.roomId}`);
+      this.channel
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'room_players', filter: `room_id=eq.${this.roomId}` }, () => this.refreshState())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'rooms', filter: `id=eq.${this.roomId}` }, () => this.refreshState())
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'room_events', filter: `room_id=eq.${this.roomId}` }, (p) => this.receiveEvent(p.new));
       window.addEventListener('beforeunload', () => this.leave());
     }
 
-    // ── mensajería ─────────────────────────────────────────
-    send(msg) {
-      if (!this.closed) this.channel.postMessage({ ...msg, from: this.selfId });
+    async start() {
+      await this.channel.subscribe();
+      await this.refreshState();
+      this.heartbeat = setInterval(() => this.touchPresence(), 5000);
+      return this;
     }
 
-    onMessage(msg) {
-      if (this.closed || msg.from === this.selfId) return;
-
-      if (this.isHost) {
-        switch (msg.type) {
-          case 'join-request': this.hostHandleJoin(msg); break;
-          case 'set-ready': this.hostSetReady(msg.playerId, msg.ready); break;
-          case 'leave': this.hostRemovePlayer(msg.playerId); break;
-          case 'ping-room': this.send({ type: 'room-info', reqId: msg.reqId, exists: true }); break;
-        }
-      } else {
-        switch (msg.type) {
-          case 'state': this.clientReceiveState(msg.state); break;
-          case 'countdown-start': this.events.onCountdownStart?.(); break;
-          case 'countdown-cancel': this.events.onCountdownCancel?.(msg.reason); break;
-          case 'game-start': this.events.onGameStart?.(); break;
-          case 'room-closed': this.close('el anfitrión cerró la sala'); break;
-          case 'join-reject':
-            if (msg.playerId === this.selfId) this.close(msg.reason);
-            break;
-        }
-      }
+    async touchPresence() {
+      if (this.closed) return;
+      await sb().from('room_players').update({ last_seen_at: new Date().toISOString() }).eq('session_id', this.selfId);
     }
 
-    // ── lógica del anfitrión ───────────────────────────────
-    hostHandleJoin(msg) {
-      if (this.state.players.some((p) => p.id === msg.player.id)) return;
-      if (this.state.players.length >= this.state.maxPlayers) {
-        this.send({ type: 'join-reject', playerId: msg.player.id, reason: 'la sala está llena' });
-        return;
-      }
-      this.state.players.push({ ...msg.player, ready: false, isHost: false });
-      // Alguien nuevo entra: cualquier cuenta atrás se aborta.
-      this.hostCancelCountdown('alguien ha entrado en la sala');
-      this.broadcastState();
-    }
-
-    hostSetReady(playerId, ready) {
-      const p = this.state.players.find((x) => x.id === playerId);
-      if (!p || p.ready === ready) return;
-      p.ready = ready;
-      if (!ready) this.hostCancelCountdown(`${p.name} ya no está listo`);
-      this.broadcastState();
-      this.hostCheckAllReady();
-    }
-
-    hostRemovePlayer(playerId) {
-      const idx = this.state.players.findIndex((x) => x.id === playerId);
-      if (idx === -1) return;
-      const [gone] = this.state.players.splice(idx, 1);
-      this.hostCancelCountdown(`${gone.name} ha abandonado la sala`);
-      this.broadcastState();
-      this.hostCheckAllReady();
-    }
-
-    hostCheckAllReady() {
-      const ps = this.state.players;
-      const allReady = ps.length >= 1 && ps.every((p) => p.ready);
-      if (allReady && !this.state.countdown) {
-        this.state.countdown = { startedAt: Date.now() };
-        this.send({ type: 'countdown-start' });
-        this.events.onCountdownStart?.();
-        this.countdownTimer = setTimeout(() => {
-          this.send({ type: 'game-start' });
-          this.events.onGameStart?.();
-        }, BLACKOUT_CONFIG.countdownSeconds * 1000);
-        this.broadcastState();
-      }
-    }
-
-    hostCancelCountdown(reason) {
-      if (!this.state.countdown) return;
-      this.state.countdown = null;
-      clearTimeout(this.countdownTimer);
-      this.countdownTimer = null;
-      this.send({ type: 'countdown-cancel', reason });
-      this.events.onCountdownCancel?.(reason);
-    }
-
-    broadcastState() {
-      this.send({ type: 'state', state: this.state });
+    async refreshState() {
+      if (this.closed) return;
+      const { data: roomRow, error: roomErr } = await sb().from('rooms').select('*').eq('id', this.roomId).single();
+      if (roomErr || !roomRow || roomRow.status === 'closed') return this.close('la sala se ha cerrado');
+      const { data: players, error } = await sb()
+        .from('room_players')
+        .select('session_id,player_device_id,player_name,ready,is_host,last_seen_at')
+        .eq('room_id', this.roomId)
+        .order('joined_at', { ascending: true });
+      if (error) return console.warn('[Net] estado sala:', error);
+      this.state = {
+        code: roomRow.code,
+        name: roomRow.name,
+        maxPlayers: roomRow.max_players,
+        countdown: roomRow.countdown_started_at ? { startedAt: new Date(roomRow.countdown_started_at).getTime() } : null,
+        players: players.map((p) => ({
+          id: p.session_id,
+          deviceId: p.player_device_id,
+          name: p.player_name,
+          ready: p.ready,
+          isHost: p.is_host,
+        })),
+      };
       this.events.onState?.(this.state);
+      if (this.isHost) this.hostCheckAllReady();
     }
 
-    // ── lógica del cliente ─────────────────────────────────
-    clientReceiveState(state) {
-      this.lastStateAt = Date.now();
-      if (!state.players.some((p) => p.id === this.selfId)) return; // aún no aceptado
-      this.state = state;
-      this.events.onState?.(state);
+    async emit(type, payload = {}) {
+      await sb().from('room_events').insert({ room_id: this.roomId, actor_session_id: this.selfId, event_type: type, payload });
     }
 
-    // ── acciones públicas ──────────────────────────────────
-    setReady(ready) {
-      if (this.isHost) {
-        this.hostSetReady(this.selfId, ready);
-      } else {
-        this.send({ type: 'set-ready', playerId: this.selfId, ready });
-      }
+    receiveEvent(row) {
+      if (row.actor_session_id === this.selfId) return;
+      if (row.event_type === 'countdown-start') this.events.onCountdownStart?.();
+      if (row.event_type === 'countdown-cancel') this.events.onCountdownCancel?.(row.payload?.reason);
+      if (row.event_type === 'game-start') this.events.onGameStart?.();
+      if (row.event_type === 'room-closed') this.close('el anfitrión cerró la sala');
     }
 
-    leave() {
+    async setReady(ready) {
+      await sb().from('room_players').update({ ready, last_seen_at: new Date().toISOString() }).eq('session_id', this.selfId);
+      await this.refreshState();
+    }
+
+    async hostCheckAllReady() {
+      const ps = this.state?.players || [];
+      if (ps.length < 2 || !ps.every((p) => p.ready) || this.state.countdown) return;
+      const started = new Date().toISOString();
+      await sb().from('rooms').update({ countdown_started_at: started, status: 'countdown' }).eq('id', this.roomId);
+      await this.emit('countdown-start');
+      this.events.onCountdownStart?.();
+      this.countdownTimer = setTimeout(async () => {
+        await sb().from('rooms').update({ status: 'playing' }).eq('id', this.roomId);
+        await this.emit('game-start');
+        this.events.onGameStart?.();
+      }, BLACKOUT_CONFIG.countdownSeconds * 1000);
+    }
+
+    async leave() {
       if (this.closed) return;
       if (this.isHost) {
-        this.send({ type: 'room-closed' });
+        await sb().from('rooms').update({ status: 'closed' }).eq('id', this.roomId);
+        await this.emit('room-closed');
       } else {
-        this.send({ type: 'leave', playerId: this.selfId });
+        await sb().from('room_players').delete().eq('session_id', this.selfId);
       }
       this.close(null, true);
     }
@@ -181,67 +120,48 @@ const Net = (() => {
       if (this.closed) return;
       this.closed = true;
       clearInterval(this.heartbeat);
-      clearInterval(this.watchdog);
       clearTimeout(this.countdownTimer);
-      this.channel.close();
+      sb()?.removeChannel(this.channel);
       if (!silent) this.events.onClosed?.(reason);
     }
   }
 
-  // ── API pública ──────────────────────────────────────────
-
-  function createRoom({ roomName, maxPlayers, player, events }) {
+  async function createRoom({ roomName, maxPlayers, player, events }) {
+    if (!useSupabase()) return LocalNet.createRoom({ roomName, maxPlayers, player, events });
     const code = generateCode();
-    const session = new RoomSession({ code, player, isHost: true, roomName, maxPlayers, events });
-    // estado inicial inmediato
-    queueMicrotask(() => session.broadcastState());
-    return session;
+    const { data: roomRow, error } = await sb().from('rooms').insert({ code, name: roomName, max_players: maxPlayers, host_device_id: player.deviceId }).select().single();
+    if (error) throw error;
+    const session = new RealtimeRoomSession({ roomRow, player, isHost: true, events });
+    const { error: joinErr } = await sb().from('room_players').insert({ room_id: roomRow.id, session_id: session.selfId, player_device_id: player.deviceId, player_name: player.name, is_host: true });
+    if (joinErr) throw joinErr;
+    return session.start();
   }
 
-  /**
-   * Se une a una sala existente. Devuelve una promesa que se
-   * resuelve con la sesión, o se rechaza si nadie responde
-   * (sala inexistente) o la sala está llena.
-   */
-  function joinRoom({ code, player, events }) {
-    return new Promise((resolve, reject) => {
-      const session = new RoomSession({ code, player, isHost: false, events });
-      let settled = false;
-
-      const origReceive = session.clientReceiveState.bind(session);
-      session.clientReceiveState = (state) => {
-        origReceive(state);
-        if (!settled && state.players.some((p) => p.id === session.selfId)) {
-          settled = true;
-          clearTimeout(timeout);
-          resolve(session);
-        }
-      };
-
-      const origClose = session.close.bind(session);
-      session.close = (reason, silent) => {
-        origClose(reason, silent);
-        if (!settled) {
-          settled = true;
-          clearTimeout(timeout);
-          reject(new Error(reason || 'no se pudo entrar en la sala'));
-        }
-      };
-
-      const timeout = setTimeout(() => {
-        if (!settled) {
-          settled = true;
-          session.close(null, true);
-          reject(new Error('esa sala no existe… o ya no queda nadie vivo'));
-        }
-      }, 3000);
-
-      session.send({
-        type: 'join-request',
-        player: { id: session.selfId, deviceId: player.deviceId, name: player.name },
-      });
-    });
+  async function joinRoom({ code, player, events }) {
+    if (!useSupabase()) return LocalNet.joinRoom({ code, player, events });
+    const normalized = code.trim().toUpperCase();
+    const { data: roomRows, error } = await sb().from('rooms').select('*').eq('code', normalized).in('status', ['waiting', 'countdown']).limit(1);
+    if (error) throw error;
+    const roomRow = roomRows?.[0];
+    if (!roomRow) throw new Error('esa sala no existe… o ya no queda nadie vivo');
+    const { count } = await sb().from('room_players').select('session_id', { count: 'exact', head: true }).eq('room_id', roomRow.id);
+    if ((count || 0) >= roomRow.max_players) throw new Error('la sala está llena');
+    const session = new RealtimeRoomSession({ roomRow, player, isHost: false, events });
+    const { error: joinErr } = await sb().from('room_players').insert({ room_id: roomRow.id, session_id: session.selfId, player_device_id: player.deviceId, player_name: player.name });
+    if (joinErr) throw joinErr;
+    return session.start();
   }
+
+  // Fallback mínimo para desarrollo sin SDK/Supabase: conserva la API existente.
+  const LocalNet = (() => {
+    function createRoom({ roomName, maxPlayers, player, events }) {
+      const code = generateCode();
+      const state = { code, name: roomName, maxPlayers, countdown: null, players: [{ id: crypto.randomUUID(), deviceId: player.deviceId, name: player.name, ready: false, isHost: true }] };
+      return { code, state, selfId: state.players[0].id, setReady(r) { state.players[0].ready = r; events?.onState?.(state); }, leave() {}, close() {} };
+    }
+    async function joinRoom() { throw new Error('Supabase Realtime no está disponible'); }
+    return { createRoom, joinRoom };
+  })();
 
   return { createRoom, joinRoom, generateCode };
 })();
