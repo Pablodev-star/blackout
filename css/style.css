@@ -894,6 +894,7 @@ input {
   from { opacity: 0; transform: scale(0.6) translateY(30px); filter: blur(5px); }
   to { opacity: 1; transform: scale(1) translateY(0); filter: none; }
 }
+.player-card.no-join-anim { animation: none; }
 .player-card.leaving-card { animation: player-leave 0.4s ease-in both; }
 @keyframes player-leave {
   to { opacity: 0; transform: scale(0.7); filter: blur(6px) brightness(0.2); }

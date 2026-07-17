@@ -28,7 +28,14 @@ const Storage = (() => {
 
   async function savePlayerName(name) {
     const existing = getPlayer();
-    const claimed = await Backend.claimPlayerName(name, existing?.deviceId);
+    const normalized = name.trim();
+    if (existing?.name && existing.name.trim().toLowerCase() === normalized.toLowerCase()) {
+      const now = new Date().toISOString();
+      const player = { ...existing, name: existing.name, updatedAt: now };
+      write(KEYS.player, player);
+      return player;
+    }
+    const claimed = await Backend.claimPlayerName(normalized, existing?.deviceId);
     const now = new Date().toISOString();
     const player = {
       name: claimed.player.name,

@@ -400,3 +400,15 @@ $$;
 alter table public.rooms replica identity full;
 alter table public.room_players replica identity full;
 alter table public.room_events replica identity full;
+
+-- Verification: this returns every BLACKOUT object expected by the game.
+select table_name
+from information_schema.tables
+where table_schema = 'public'
+  and table_name in ('players', 'player_devices', 'leaderboards', 'rooms', 'room_players', 'room_events')
+order by table_name;
+
+select routine_name
+from information_schema.routines
+where routine_schema = 'public'
+  and routine_name = 'claim_player_name';
