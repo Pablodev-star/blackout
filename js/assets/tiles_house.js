@@ -50,22 +50,22 @@
   ];
 
   T.floor_wood_b = [
-    'wwWwwwwwwwwwwwww',
+    'wwwwWwwwwwwwWwww',
+    'wWwwwwwwWwwwwwww',
+    'wwwwdddddwwwwwdw',
+    'dddddddddddddddd',
+    'wwWdddddddwwWwww',
+    'wwwddwwwddwwwwww',
+    'wnwddWwwddwwwwnw',
+    'dddddddddddddddd',
+    'wwwwdddddwwwwwww',
     'wwwwwwwwwwWwwwww',
-    'wwwwwddwwwwwwwww',
+    'wwdwwwwwwwwwwdww',
     'dddddddddddddddd',
-    'wwwwwwwwwWwwwwww',
-    'wwwwddddwwwwwwnw',
-    'wwwddwwddwwwwwww',
-    'wwwddwwddwwwwwww',
-    'wwwwddddwwwwwwww',
+    'wWwwwwwwwWwwwwww',
+    'wwwwwwnwwwwwwwww',
+    'wwwwWwwwwwwwWwww',
     'dddddddddddddddd',
-    'wWwwwwwwwwwwWwww',
-    'wwwwwwwwwwwwwwww',
-    'wwwwwwWwwnwwwwww',
-    'dddddddddddddddd',
-    'wwwwwwwwwwwwwWww',
-    'wwWwwwwwwwwwwwww',
   ];
 
   T.floor_wood_broken = [

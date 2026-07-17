@@ -26,6 +26,10 @@
   let staticLayer = null;   // canvas 352×224 con todo lo que no se mueve
   let logical = null;       // canvas 352×224 que se compone cada frame
   let lightningAt = -9999;  // último relámpago (ms de la escena)
+  let lastFlickerBucket = -1;
+  let didFadeSound = false;
+  let finished = false;
+  let onDone = null;
 
   // pseudo-azar determinista para que el suelo no cambie entre frames
   function det(n) {
@@ -226,6 +230,15 @@
     const fx = b.x + b.w + 8;
     const fy = b.y + 12;
     const st = flashlightState(stage);
+    const bucket = Math.floor(t / 150);
+    if (st.dying && st.on && bucket !== lastFlickerBucket) {
+      lastFlickerBucket = bucket;
+      GameAudio.flashlightFlicker?.();
+    }
+    if (stage >= 0.72 && !didFadeSound) {
+      didFadeSound = true;
+      GameAudio.fadeOutLight?.();
+    }
 
     if (st.on) {
       // charco de luz cálida sobre el suelo
@@ -358,12 +371,20 @@
     ctx.lineWidth = Math.max(1, dpr);
     ctx.strokeRect(dx - 1, dy - 1, RW * scale + 2, RH * scale + 2);
 
+    if (stage >= 1 && !finished) {
+      finished = true;
+      stops.push(setTimeout(() => onDone?.(), 450));
+    }
     raf = requestAnimationFrame(render);
   }
 
   function start(options = {}) {
     stop();
     cast = makeCast(options.players);
+    onDone = typeof options.onDone === 'function' ? options.onDone : null;
+    lastFlickerBucket = -1;
+    didFadeSound = false;
+    finished = false;
     logical = document.createElement('canvas');
     logical.width = RW; logical.height = RH;
     buildStatic();
@@ -383,6 +404,7 @@
   function stop() {
     cancelAnimationFrame(raf);
     stops.splice(0).forEach(clearTimeout);
+    onDone = null;
   }
 
   window.Cutscene = { start, stop };
