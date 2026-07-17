@@ -16,6 +16,10 @@ const Net = (() => {
   const sb = () => Backend.getClient?.();
   const useSupabase = () => Boolean(sb());
 
+  async function cleanupEmptyRooms() {
+    try { await sb()?.rpc('cleanup_empty_rooms'); } catch (err) { console.warn('[Net] limpieza salas:', err); }
+  }
+
   class RealtimeRoomSession {
     constructor({ roomRow, player, isHost, events }) {
       this.roomId = roomRow.id;
@@ -37,14 +41,16 @@ const Net = (() => {
 
     async start() {
       await this.channel.subscribe();
+      await cleanupEmptyRooms();
       await this.refreshState();
-      this.heartbeat = setInterval(() => this.touchPresence(), 5000);
+      this.heartbeat = setInterval(() => this.touchPresence(), 10000);
       return this;
     }
 
     async touchPresence() {
       if (this.closed) return;
       await sb().from('room_players').update({ last_seen_at: new Date().toISOString() }).eq('session_id', this.selfId);
+      await cleanupEmptyRooms();
     }
 
     async refreshState() {
@@ -58,6 +64,7 @@ const Net = (() => {
         .order('joined_at', { ascending: true });
       if (error) return console.warn('[Net] estado sala:', error);
       this.state = {
+        selfId: this.selfId,
         code: roomRow.code,
         name: roomRow.name,
         maxPlayers: roomRow.max_players,
@@ -93,7 +100,17 @@ const Net = (() => {
 
     async hostCheckAllReady() {
       const ps = this.state?.players || [];
-      if (ps.length < 2 || !ps.every((p) => p.ready) || this.state.countdown) return;
+      const allReady = ps.length >= 1 && ps.every((p) => p.ready);
+      if (this.state?.countdown && !allReady) {
+        clearTimeout(this.countdownTimer);
+        this.countdownTimer = null;
+        await sb().from('rooms').update({ countdown_started_at: null, status: 'waiting' }).eq('id', this.roomId);
+        await this.emit('countdown-cancel', { reason: 'alguien quitó listo' });
+        this.events.onCountdownCancel?.('alguien quitó listo');
+        await this.refreshState();
+        return;
+      }
+      if (!allReady || this.state?.countdown) return;
       const started = new Date().toISOString();
       await sb().from('rooms').update({ countdown_started_at: started, status: 'countdown' }).eq('id', this.roomId);
       await this.emit('countdown-start');
@@ -108,10 +125,11 @@ const Net = (() => {
     async leave() {
       if (this.closed) return;
       if (this.isHost) {
-        await sb().from('rooms').update({ status: 'closed' }).eq('id', this.roomId);
         await this.emit('room-closed');
+        await sb().from('rooms').delete().eq('id', this.roomId);
       } else {
         await sb().from('room_players').delete().eq('session_id', this.selfId);
+        await cleanupEmptyRooms();
       }
       this.close(null, true);
     }
@@ -128,17 +146,21 @@ const Net = (() => {
 
   async function createRoom({ roomName, maxPlayers, player, events }) {
     if (!useSupabase()) return LocalNet.createRoom({ roomName, maxPlayers, player, events });
+    await cleanupEmptyRooms();
+    const linkedPlayer = await Backend.requirePlayerProfile(player);
     const code = generateCode();
-    const { data: roomRow, error } = await sb().from('rooms').insert({ code, name: roomName, max_players: maxPlayers, host_device_id: player.deviceId }).select().single();
+    const { data: roomRow, error } = await sb().from('rooms').insert({ code, name: roomName, max_players: maxPlayers, host_device_id: linkedPlayer.deviceId }).select().single();
     if (error) throw error;
-    const session = new RealtimeRoomSession({ roomRow, player, isHost: true, events });
-    const { error: joinErr } = await sb().from('room_players').insert({ room_id: roomRow.id, session_id: session.selfId, player_device_id: player.deviceId, player_name: player.name, is_host: true });
+    const session = new RealtimeRoomSession({ roomRow, player: linkedPlayer, isHost: true, events });
+    const { error: joinErr } = await sb().from('room_players').insert({ room_id: roomRow.id, session_id: session.selfId, player_device_id: linkedPlayer.deviceId, player_name: linkedPlayer.name, is_host: true });
     if (joinErr) throw joinErr;
     return session.start();
   }
 
   async function joinRoom({ code, player, events }) {
     if (!useSupabase()) return LocalNet.joinRoom({ code, player, events });
+    await cleanupEmptyRooms();
+    const linkedPlayer = await Backend.requirePlayerProfile(player);
     const normalized = code.trim().toUpperCase();
     const { data: roomRows, error } = await sb().from('rooms').select('*').eq('code', normalized).in('status', ['waiting', 'countdown']).limit(1);
     if (error) throw error;
@@ -146,8 +168,8 @@ const Net = (() => {
     if (!roomRow) throw new Error('esa sala no existe… o ya no queda nadie vivo');
     const { count } = await sb().from('room_players').select('session_id', { count: 'exact', head: true }).eq('room_id', roomRow.id);
     if ((count || 0) >= roomRow.max_players) throw new Error('la sala está llena');
-    const session = new RealtimeRoomSession({ roomRow, player, isHost: false, events });
-    const { error: joinErr } = await sb().from('room_players').insert({ room_id: roomRow.id, session_id: session.selfId, player_device_id: player.deviceId, player_name: player.name });
+    const session = new RealtimeRoomSession({ roomRow, player: linkedPlayer, isHost: false, events });
+    const { error: joinErr } = await sb().from('room_players').insert({ room_id: roomRow.id, session_id: session.selfId, player_device_id: linkedPlayer.deviceId, player_name: linkedPlayer.name });
     if (joinErr) throw joinErr;
     return session.start();
   }

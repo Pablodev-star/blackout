@@ -14,8 +14,7 @@ const BLACKOUT_CONFIG = {
       leaderboards: 'leaderboards',
       rooms: 'rooms',
       roomPlayers: 'room_players',
-      roomEvents: 'room_events',
-      playerStates: 'player_states'
+      roomEvents: 'room_events'
     },
   },
 
