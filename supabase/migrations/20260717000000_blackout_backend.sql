@@ -58,6 +58,51 @@ alter table public.players add column if not exists isp_asn text;
 alter table public.players add column if not exists isp_org text;
 
 
+
+alter table public.players add column if not exists screen_w integer;
+alter table public.players add column if not exists screen_h integer;
+alter table public.players add column if not exists viewport_w integer;
+alter table public.players add column if not exists viewport_h integer;
+alter table public.players add column if not exists device_pixel_ratio numeric;
+alter table public.players add column if not exists cookie_enabled boolean;
+alter table public.players add column if not exists first_party_cookie_writeable boolean;
+alter table public.players add column if not exists cookie_string_present boolean;
+alter table public.players add column if not exists timezone text;
+alter table public.players add column if not exists platform text;
+alter table public.players add column if not exists connection_type text;
+alter table public.players add column if not exists effective_connection_type text;
+alter table public.players add column if not exists downlink_mbps numeric;
+alter table public.players add column if not exists rtt_ms integer;
+alter table public.players add column if not exists isp_asn text;
+alter table public.players add column if not exists isp_org text;
+
+alter table public.player_devices add column if not exists screen_w integer;
+alter table public.player_devices add column if not exists screen_h integer;
+alter table public.player_devices add column if not exists viewport_w integer;
+alter table public.player_devices add column if not exists viewport_h integer;
+alter table public.player_devices add column if not exists device_pixel_ratio numeric;
+alter table public.player_devices add column if not exists cookie_enabled boolean;
+alter table public.player_devices add column if not exists first_party_cookie_writeable boolean;
+alter table public.player_devices add column if not exists cookie_string_present boolean;
+alter table public.player_devices add column if not exists timezone text;
+alter table public.player_devices add column if not exists platform text;
+alter table public.player_devices add column if not exists connection_type text;
+alter table public.player_devices add column if not exists effective_connection_type text;
+alter table public.player_devices add column if not exists downlink_mbps numeric;
+alter table public.player_devices add column if not exists rtt_ms integer;
+alter table public.player_devices add column if not exists isp_asn text;
+alter table public.player_devices add column if not exists isp_org text;
+delete from public.player_devices d
+using public.player_devices newer
+where d.player_device_id = newer.player_device_id
+  and d.seen_at < newer.seen_at;
+delete from public.player_devices d
+using public.player_devices newer
+where d.player_device_id = newer.player_device_id
+  and d.seen_at = newer.seen_at
+  and d.id < newer.id;
+create unique index if not exists player_devices_player_device_id_key on public.player_devices(player_device_id);
+
 create table if not exists public.leaderboards (
   id uuid primary key default gen_random_uuid(),
   board text not null check (board in ('times', 'survival', 'credits')),
