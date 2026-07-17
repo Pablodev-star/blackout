@@ -83,6 +83,16 @@ La regla de nombres es: si el nombre existe y el `deviceId` coincide, el
 jugador vuelve a entrar; si el mismo nombre viene de otro dispositivo, se
 rechaza.
 
+### Solución de problemas
+
+- Si al ejecutar el SQL aparece una tabla con la columna `routine_name` y el
+  valor `claim_player_name`, eso es correcto: es la verificación final de que
+  la función RPC existe.
+- Si al crear una sala aparece `violates foreign key constraint`, el perfil que
+  estaba guardado en `localStorage` se creó antes de que existieran las tablas.
+  El juego ahora vuelve a vincular el perfil con Supabase justo antes de crear
+  o unirse a una sala para evitar ese error.
+
 ## Estructura
 
 ```
