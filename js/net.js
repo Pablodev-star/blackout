@@ -58,6 +58,7 @@ const Net = (() => {
         .order('joined_at', { ascending: true });
       if (error) return console.warn('[Net] estado sala:', error);
       this.state = {
+        selfId: this.selfId,
         code: roomRow.code,
         name: roomRow.name,
         maxPlayers: roomRow.max_players,

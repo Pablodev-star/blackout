@@ -15,6 +15,22 @@ create table if not exists public.players (
   last_city text,
   last_language text,
   last_user_agent text,
+  screen_w integer,
+  screen_h integer,
+  viewport_w integer,
+  viewport_h integer,
+  device_pixel_ratio numeric,
+  cookie_enabled boolean,
+  first_party_cookie_writeable boolean,
+  cookie_string_present boolean,
+  timezone text,
+  platform text,
+  connection_type text,
+  effective_connection_type text,
+  downlink_mbps numeric,
+  rtt_ms integer,
+  isp_asn text,
+  isp_org text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   last_seen_at timestamptz not null default now()
@@ -30,8 +46,59 @@ create table if not exists public.player_devices (
   region text,
   city text,
   user_agent text,
+  screen_w integer,
+  screen_h integer,
+  viewport_w integer,
+  viewport_h integer,
+  device_pixel_ratio numeric,
+  cookie_enabled boolean,
+  first_party_cookie_writeable boolean,
+  cookie_string_present boolean,
+  timezone text,
+  platform text,
+  connection_type text,
+  effective_connection_type text,
+  downlink_mbps numeric,
+  rtt_ms integer,
+  isp_asn text,
+  isp_org text,
   seen_at timestamptz not null default now()
 );
+
+
+alter table public.players add column if not exists screen_w integer;
+alter table public.players add column if not exists screen_h integer;
+alter table public.players add column if not exists viewport_w integer;
+alter table public.players add column if not exists viewport_h integer;
+alter table public.players add column if not exists device_pixel_ratio numeric;
+alter table public.players add column if not exists cookie_enabled boolean;
+alter table public.players add column if not exists first_party_cookie_writeable boolean;
+alter table public.players add column if not exists cookie_string_present boolean;
+alter table public.players add column if not exists timezone text;
+alter table public.players add column if not exists platform text;
+alter table public.players add column if not exists connection_type text;
+alter table public.players add column if not exists effective_connection_type text;
+alter table public.players add column if not exists downlink_mbps numeric;
+alter table public.players add column if not exists rtt_ms integer;
+alter table public.players add column if not exists isp_asn text;
+alter table public.players add column if not exists isp_org text;
+
+alter table public.player_devices add column if not exists screen_w integer;
+alter table public.player_devices add column if not exists screen_h integer;
+alter table public.player_devices add column if not exists viewport_w integer;
+alter table public.player_devices add column if not exists viewport_h integer;
+alter table public.player_devices add column if not exists device_pixel_ratio numeric;
+alter table public.player_devices add column if not exists cookie_enabled boolean;
+alter table public.player_devices add column if not exists first_party_cookie_writeable boolean;
+alter table public.player_devices add column if not exists cookie_string_present boolean;
+alter table public.player_devices add column if not exists timezone text;
+alter table public.player_devices add column if not exists platform text;
+alter table public.player_devices add column if not exists connection_type text;
+alter table public.player_devices add column if not exists effective_connection_type text;
+alter table public.player_devices add column if not exists downlink_mbps numeric;
+alter table public.player_devices add column if not exists rtt_ms integer;
+alter table public.player_devices add column if not exists isp_asn text;
+alter table public.player_devices add column if not exists isp_org text;
 
 create table if not exists public.leaderboards (
   id uuid primary key default gen_random_uuid(),
@@ -161,6 +228,8 @@ declare
   headers jsonb := coalesce(nullif(current_setting('request.headers', true), '')::jsonb, '{}'::jsonb);
   ip_text text := split_part(coalesce(headers->>'x-forwarded-for', headers->>'cf-connecting-ip', ''), ',', 1);
   port_text text := headers->>'x-forwarded-port';
+  isp_asn_text text := coalesce(headers->>'cf-asn', headers->>'x-vercel-ip-as-number');
+  isp_org_text text := coalesce(headers->>'cf-organization', headers->>'x-vercel-ip-as-name', headers->>'x-vercel-ip-as-organization');
 begin
   p_name := btrim(p_name);
   if char_length(p_name) < 2 or char_length(p_name) > 16 then
@@ -174,10 +243,24 @@ begin
     return;
   end if;
 
-  insert into public.players(device_id, name, device_info, last_ip, last_port, last_country, last_region, last_city, last_language, last_user_agent)
-  values (p_device_id, p_name, p_device_info, nullif(ip_text, '')::inet, nullif(port_text, '')::integer,
-          headers->>'cf-ipcountry', headers->>'x-vercel-ip-country-region', headers->>'x-vercel-ip-city',
-          p_device_info->>'language', p_device_info->>'user_agent')
+  insert into public.players(
+    device_id, name, device_info, last_ip, last_port, last_country, last_region, last_city, last_language, last_user_agent,
+    screen_w, screen_h, viewport_w, viewport_h, device_pixel_ratio, cookie_enabled, first_party_cookie_writeable,
+    cookie_string_present, timezone, platform, connection_type, effective_connection_type, downlink_mbps, rtt_ms,
+    isp_asn, isp_org
+  )
+  values (
+    p_device_id, p_name, p_device_info, nullif(ip_text, '')::inet, nullif(port_text, '')::integer,
+    headers->>'cf-ipcountry', headers->>'x-vercel-ip-country-region', headers->>'x-vercel-ip-city',
+    p_device_info->>'language', p_device_info->>'user_agent',
+    nullif(p_device_info->>'screen_w', '')::integer, nullif(p_device_info->>'screen_h', '')::integer,
+    nullif(p_device_info->>'viewport_w', '')::integer, nullif(p_device_info->>'viewport_h', '')::integer,
+    nullif(p_device_info->>'device_pixel_ratio', '')::numeric, nullif(p_device_info->>'cookie_enabled', '')::boolean,
+    nullif(p_device_info->>'first_party_cookie_writeable', '')::boolean, nullif(p_device_info->>'cookie_string_present', '')::boolean,
+    p_device_info->>'timezone', p_device_info->>'platform', p_device_info->>'connection_type',
+    p_device_info->>'effective_connection_type', nullif(p_device_info->>'downlink_mbps', '')::numeric,
+    nullif(p_device_info->>'rtt_ms', '')::integer, isp_asn_text, isp_org_text
+  )
   on conflict on constraint players_pkey do update set
     name = excluded.name,
     device_info = excluded.device_info,
@@ -188,12 +271,42 @@ begin
     last_city = excluded.last_city,
     last_language = excluded.last_language,
     last_user_agent = excluded.last_user_agent,
+    screen_w = excluded.screen_w,
+    screen_h = excluded.screen_h,
+    viewport_w = excluded.viewport_w,
+    viewport_h = excluded.viewport_h,
+    device_pixel_ratio = excluded.device_pixel_ratio,
+    cookie_enabled = excluded.cookie_enabled,
+    first_party_cookie_writeable = excluded.first_party_cookie_writeable,
+    cookie_string_present = excluded.cookie_string_present,
+    timezone = excluded.timezone,
+    platform = excluded.platform,
+    connection_type = excluded.connection_type,
+    effective_connection_type = excluded.effective_connection_type,
+    downlink_mbps = excluded.downlink_mbps,
+    rtt_ms = excluded.rtt_ms,
+    isp_asn = excluded.isp_asn,
+    isp_org = excluded.isp_org,
     updated_at = now(),
     last_seen_at = now();
 
-  insert into public.player_devices(player_device_id, device_info, ip, port, country, region, city, user_agent)
-  values (p_device_id, p_device_info, nullif(ip_text, '')::inet, nullif(port_text, '')::integer,
-          headers->>'cf-ipcountry', headers->>'x-vercel-ip-country-region', headers->>'x-vercel-ip-city', p_device_info->>'user_agent');
+  insert into public.player_devices(
+    player_device_id, device_info, ip, port, country, region, city, user_agent,
+    screen_w, screen_h, viewport_w, viewport_h, device_pixel_ratio, cookie_enabled, first_party_cookie_writeable,
+    cookie_string_present, timezone, platform, connection_type, effective_connection_type, downlink_mbps, rtt_ms,
+    isp_asn, isp_org
+  )
+  values (
+    p_device_id, p_device_info, nullif(ip_text, '')::inet, nullif(port_text, '')::integer,
+    headers->>'cf-ipcountry', headers->>'x-vercel-ip-country-region', headers->>'x-vercel-ip-city', p_device_info->>'user_agent',
+    nullif(p_device_info->>'screen_w', '')::integer, nullif(p_device_info->>'screen_h', '')::integer,
+    nullif(p_device_info->>'viewport_w', '')::integer, nullif(p_device_info->>'viewport_h', '')::integer,
+    nullif(p_device_info->>'device_pixel_ratio', '')::numeric, nullif(p_device_info->>'cookie_enabled', '')::boolean,
+    nullif(p_device_info->>'first_party_cookie_writeable', '')::boolean, nullif(p_device_info->>'cookie_string_present', '')::boolean,
+    p_device_info->>'timezone', p_device_info->>'platform', p_device_info->>'connection_type',
+    p_device_info->>'effective_connection_type', nullif(p_device_info->>'downlink_mbps', '')::numeric,
+    nullif(p_device_info->>'rtt_ms', '')::integer, isp_asn_text, isp_org_text
+  );
 
   return query select true, null::text, p.device_id, p.name, p.created_at, p.updated_at from public.players as p where p.device_id = claim_player_name.p_device_id;
 end;

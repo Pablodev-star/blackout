@@ -73,7 +73,9 @@ no, el script usa `fqcuhetsqwobuxuocwub`.
 ### Objetos creados
 
 - `players` y `player_devices`: nombre único por dispositivo y telemetría útil
-  accesible desde navegador. IP, puerto y cabeceras se capturan en la función
+  accesible desde navegador, incluyendo resolución/viewport, cookies,
+  zona horaria, plataforma, conexión y, si Supabase/CDN lo expone en headers,
+  ASN/proveedor de internet. IP, puerto y cabeceras se capturan en la función
   SQL `claim_player_name()` desde la petición que recibe Supabase.
 - `leaderboards`: rankings por `times`, `survival` y `credits`.
 - `rooms`, `room_players`, `player_states` y `room_events`: lobby, presencia,

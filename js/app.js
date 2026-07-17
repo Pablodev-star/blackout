@@ -340,6 +340,7 @@
     const prevIds = new Set(Array.from(wrap.querySelectorAll('.player-card')).map((c) => c.dataset.id));
     wrap.innerHTML = '';
 
+    const selfId = state.selfId || room?.selfId;
     state.players.forEach((p) => {
       const card = document.createElement('div');
       card.className = `player-card ${p.ready ? 'ready' : ''}`;
@@ -347,7 +348,7 @@
       if (prevIds.size && !prevIds.has(p.id)) GameAudio.stinger(true);
       card.innerHTML = `
         <div class="player-face">${Avatars.faceSVG(p.name)}</div>
-        <span class="player-name">${escapeHTML(p.name)}${p.id === room.selfId ? ' (tú)' : ''}</span>
+        <span class="player-name">${escapeHTML(p.name)}${p.id === selfId ? ' (tú)' : ''}</span>
         <span class="player-badge ${p.isHost ? 'host-badge' : ''}">
           ${p.ready ? '✓ LISTO' : p.isHost ? '♛ ANFITRIÓN' : 'esperando'}
         </span>`;
@@ -362,7 +363,7 @@
     }
 
     const readyCount = state.players.filter((p) => p.ready).length;
-    const me = state.players.find((p) => p.id === room.selfId);
+    const me = state.players.find((p) => p.id === selfId);
     if (me) {
       $('#ready-btn').classList.toggle('is-ready', me.ready);
       $('#ready-btn .btn-label').textContent = me.ready ? '✓ LISTO' : 'LISTO';
