@@ -806,9 +806,8 @@
   // ══════════ JUEGO REAL: dormitorio jugable ══════════
 
   const GameWorld = (() => {
-    const W = 352, H = 224, WALL_H = 64, SPEED = 76, R = 8, WAKE_MS = 1400;
-    let raf = 0, last = 0, ctx = null, canvas = null, local = null, remotes = new Map(), keys = new Set(), lastSent = 0, wakeStarted = 0, beds = [];
-    const roomSolids = [{ x: 0, y: 0, w: W, h: WALL_H - 8 }, { x: 312, y: 2, w: 32, h: 64 }];
+    const W = 352, H = 224, WALL_H = 64, SPEED = 76, R = 14, PLAYER_SCALE = 2, WAKE_MS = 1400;
+    let raf = 0, last = 0, ctx = null, canvas = null, local = null, remotes = new Map(), keys = new Set(), lastSent = 0, wakeStarted = 0, beds = [], roomLayer = null;
 
     function playerList(players) {
       const base = players?.length ? players : (room?.state?.players || [{ id: room?.selfId || 'solo', name: player?.name || 'tú' }]);
@@ -819,7 +818,8 @@
       stop();
       canvas = $('#game-canvas'); ctx = canvas.getContext('2d');
       const list = playerList(players);
-      beds = bedLayout(list.length);
+      beds = InitialBedroom?.bedLayout ? InitialBedroom.bedLayout(list.length) : bedLayout(list.length);
+      buildRoomLayer(list.length);
       const selfId = room?.selfId || list[0]?.id || 'solo';
       const badge = Math.max(0, list.findIndex((p) => p.id === selfId));
       const ownBed = beds[badge] || beds[0];
@@ -831,6 +831,12 @@
     }
     function stop() { cancelAnimationFrame(raf); }
     function setRemote(id, st) { if (!local || id === local.id || !st) return; remotes.set(id, { ...(remotes.get(id) || { id, name: 'alma', badge: remotes.size + 1 }), ...st }); }
+    function buildRoomLayer(bedCount) {
+      roomLayer = document.createElement('canvas');
+      roomLayer.width = W; roomLayer.height = H;
+      const rctx = roomLayer.getContext('2d');
+      if (InitialBedroom?.drawStaticRoom) InitialBedroom.drawStaticRoom(rctx, bedCount);
+    }
     function bindControls() {
       if (bindControls.done) return; bindControls.done = true;
       window.addEventListener('keydown', (e) => { const d = keyDir(e.key); if (d) { keys.add(d); e.preventDefault(); } });
@@ -849,9 +855,13 @@
       return Array.from({ length: n }, (_, i) => ({ x: Math.round(32 + gap + i * (bw + gap)), y: 128 + (i % 2) * 6, w: bw, h: bh }));
     }
     function bedExit(b) { return { x: b.x + b.w / 2, y: Math.min(H - 14, b.y + b.h + 14) }; }
-    function activeSolids() { return [...roomSolids, ...(local?.bedSolid ? beds : beds.filter((b) => b.x !== local.bedX || b.y !== local.bedY))]; }
+    function activeSolids() {
+      const openBed = local?.bedSolid ? null : { x: local?.bedX, y: local?.bedY };
+      if (InitialBedroom?.furnitureSolids) return InitialBedroom.furnitureSolids(beds.length, { openBed });
+      return local?.bedSolid ? beds : beds.filter((b) => b.x !== local.bedX || b.y !== local.bedY);
+    }
     function blocked(nx, ny) {
-      const box = { x: nx - R, y: ny - 4, w: R * 2, h: 12 };
+      const box = { x: nx - R, y: ny - 8, w: R * 2, h: 18 };
       return activeSolids().some((o) => hit(box, o)) || [...remotes.values()].some((p) => Math.hypot(p.x - nx, p.y - ny) < R * 2);
     }
     function hit(a, b) { return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y; }
@@ -872,8 +882,8 @@
       if (!local.waking && keys.has('left')) dx--; if (!local.waking && keys.has('right')) dx++; if (!local.waking && keys.has('up')) dy--; if (!local.waking && keys.has('down')) dy++;
       if (dx || dy) { const l = Math.hypot(dx, dy); dx /= l; dy /= l; local.dir = Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? 'left' : 'right') : (dy < 0 ? 'up' : 'down'); }
       local.moving = Boolean(dx || dy);
-      const nx = Math.max(12, Math.min(W - 12, local.x + dx * SPEED * dt));
-      const ny = Math.max(WALL_H + 10, Math.min(H - 10, local.y + dy * SPEED * dt));
+      const nx = Math.max(16, Math.min(W - 16, local.x + dx * SPEED * dt));
+      const ny = Math.max(WALL_H + 10, Math.min(H - 8, local.y + dy * SPEED * dt));
       if (!blocked(nx, local.y)) local.x = nx; if (!blocked(local.x, ny)) local.y = ny;
       if (room?.emit && now - lastSent > 90) { lastSent = now; room.emit('player-state', { x: local.x, y: local.y, dir: local.dir, moving: local.moving, name: local.name, badge: local.badge }); }
     }
@@ -882,8 +892,8 @@
       canvas.width = Math.floor(r.width * dpr); canvas.height = Math.floor(r.height * dpr);
       const scale = Math.max(1, Math.floor(Math.min(canvas.width / W, canvas.height / H))), ox = Math.floor((canvas.width - W * scale) / 2), oy = Math.floor((canvas.height - H * scale) / 2);
       ctx.fillStyle = '#000'; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.save(); ctx.translate(ox, oy); ctx.scale(scale, scale); ctx.imageSmoothingEnabled = false;
-      for (let y = 0; y < H; y += 16) for (let x = 0; x < W; x += 16) PixelArt.draw(ctx, TILES_HOUSE.sprites[y < WALL_H ? 'wall_panel' : (x + y) % 48 ? 'floor_wood_a' : 'floor_wood_b'], 0, x, y, { scale: 1 });
-      beds.forEach((b) => PixelArt.draw(ctx, TILES_HOUSE.sprites.bed, 0, b.x, b.y, { scale: 2 }));
+      if (roomLayer) ctx.drawImage(roomLayer, 0, 0);
+      InitialBedroom?.drawWindows?.(ctx, now - wakeStarted);
       const all = [local, ...remotes.values()].sort((a, b) => a.y - b.y);
       all.forEach((p) => drawPlayer(p, now));
       ctx.fillStyle = 'rgba(0,0,0,.38)'; ctx.fillRect(0, 0, W, H); ctx.restore();
@@ -896,13 +906,13 @@
           return;
         }
         const rise = (wake - 0.45) / 0.55;
-        const y = p.y - 22 - Math.round((1 - rise) * 18);
-        PixelArt.draw(ctx, PLAYER.down, 0, Math.round(p.x - 8), y, { scale: 1, badge: p.badge || 0 });
+        const y = p.y - 44 - Math.round((1 - rise) * 18);
+        PixelArt.draw(ctx, PLAYER.down, 0, Math.round(p.x - 16), y, { scale: PLAYER_SCALE, badge: p.badge || 0 });
         return;
       }
       const side = p.dir === 'left' || p.dir === 'right'; const sprite = side ? PLAYER.side : PLAYER[p.dir || 'down'];
       const seq = p.moving ? PLAYER.WALK_SEQ : PLAYER.IDLE_SEQ; const step = seq[Math.floor(now / 130) % seq.length];
-      PixelArt.draw(ctx, sprite, step.f, Math.round(p.x - 8), Math.round(p.y - 22 + step.dy), { scale: 1, flip: p.dir === 'right', badge: p.badge || 0 });
+      PixelArt.draw(ctx, sprite, step.f, Math.round(p.x - 16), Math.round(p.y - 44 + step.dy * PLAYER_SCALE), { scale: PLAYER_SCALE, flip: p.dir === 'right', badge: p.badge || 0 });
     }
     function loop(now) { update(Math.min(0.05, (now - last) / 1000), now); draw(now); last = now; raf = requestAnimationFrame(loop); }
     return { start, stop, setRemote };

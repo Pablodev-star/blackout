@@ -56,24 +56,56 @@
   const WARDROBE = { x: 312, y: 2, w: 32, h: 64 };  // armario con rendija
   const GAP = { x: 306, y: 14, w: 5, h: 50 };       // rendija armario-pared
 
-  function bedLayout() {
-    // camas verticales (cabecero arriba), alineadas con los durmientes
-    const n = cast.length;
+  function bedLayoutForCount(count) {
+    const n = Math.max(1, count || 1);
     const bw = 32, bh = 64;
     const span = RW - 64;
     const gap = (span - n * bw) / (n + 1);
-    return cast.map((p, i) => ({
+    return Array.from({ length: n }, (_, i) => ({
       x: Math.round(32 + gap + i * (bw + gap)),
       y: 128 + (i % 2) * 6,
-      w: bw, h: bh, p,
+      w: bw, h: bh,
     }));
   }
 
+  function bedLayout() {
+    // camas verticales (cabecero arriba), alineadas con los durmientes
+    return bedLayoutForCount(cast.length).map((b, i) => ({ ...b, p: cast[i] }));
+  }
+
+  const STATIC_SOLIDS = [
+    { id: 'wall-left', x: 0, y: 0, w: DOORWAY.x - 8, h: WALL_H - 8 },
+    { id: 'wall-right', x: DOORWAY.x + DOORWAY.w + 8, y: 0, w: RW - (DOORWAY.x + DOORWAY.w + 8), h: WALL_H - 8 },
+    { id: 'wardrobe', x: WARDROBE.x, y: WARDROBE.y, w: WARDROBE.w, h: WARDROBE.h },
+    { id: 'clock', x: 6, y: 2, w: 32, h: 64 },
+    { id: 'plant', x: 40, y: 70, w: 16, h: 24 },
+    { id: 'candle', x: DOORWAY.x - 24, y: 92, w: 16, h: 16 },
+  ];
+
+  function tableLayoutForBeds(beds) {
+    return beds.slice(0, -1).map((b, i) => ({
+      id: `table-${i}`,
+      x: b.x + b.w + 6,
+      y: b.y + 18,
+      w: 16,
+      h: 16,
+    }));
+  }
+
+  function furnitureSolids(count, options = {}) {
+    const beds = bedLayoutForCount(count);
+    const blockedBeds = options.openBed
+      ? beds.filter((b) => b.x !== options.openBed.x || b.y !== options.openBed.y)
+      : beds;
+    return [
+      ...STATIC_SOLIDS,
+      ...tableLayoutForBeds(beds),
+      ...blockedBeds.map((b, i) => ({ id: `bed-${i}`, x: b.x, y: b.y, w: b.w, h: b.h })),
+    ];
+  }
+
   // ── capa estática: se pinta una sola vez ──────────────────────
-  function buildStatic() {
-    staticLayer = document.createElement('canvas');
-    staticLayer.width = RW; staticLayer.height = RH;
-    const ctx = staticLayer.getContext('2d');
+  function drawStaticRoom(ctx, bedCount = cast.length) {
     const S = TILES_HOUSE.sprites;
 
     // pared: paneles a escala 4, con papel rasgado y una huella de sangre
@@ -117,7 +149,7 @@
     ctx.restore();
 
     // camas + mesillas
-    const beds = bedLayout();
+    const beds = bedLayoutForCount(bedCount);
     beds.forEach((b, i) => {
       // sombra bajo la cama: el hueco clásico donde algo podría esperar
       ctx.fillStyle = 'rgba(2, 2, 5, 0.85)';
@@ -125,12 +157,20 @@
       PixelArt.draw(ctx, TILES_HOUSE.sprites.bed, 0, b.x, b.y, { scale: 2 });
       // mesilla entre camas (no tras la última)
       if (i < beds.length - 1) {
-        PixelArt.draw(ctx, TILES_HOUSE.sprites.table, 0, b.x + b.w + 6, b.y + 18, { scale: 1 });
+        const table = tableLayoutForBeds(beds)[i];
+        PixelArt.draw(ctx, TILES_HOUSE.sprites.table, 0, table.x, table.y, { scale: 1 });
       }
     });
 
     // vela apagada junto a la puerta
     PixelArt.draw(ctx, S.candle_stand, 0, DOORWAY.x - 24, 92, { scale: 1 });
+  }
+
+  function buildStatic() {
+    staticLayer = document.createElement('canvas');
+    staticLayer.width = RW; staticLayer.height = RH;
+    const ctx = staticLayer.getContext('2d');
+    drawStaticRoom(ctx, cast.length);
   }
 
   // ── ventanas: noche + lluvia DETRÁS del cristal ───────────────
@@ -407,5 +447,17 @@
     onDone = null;
   }
 
+  window.InitialBedroom = {
+    W: RW,
+    H: RH,
+    WALL_H,
+    DOORWAY,
+    WARDROBE,
+    GAP,
+    bedLayout: bedLayoutForCount,
+    drawStaticRoom,
+    furnitureSolids,
+    drawWindows: (ctx, t = 0) => WINDOWS.forEach((w) => drawWindow(ctx, w, t)),
+  };
   window.Cutscene = { start, stop };
 })();
