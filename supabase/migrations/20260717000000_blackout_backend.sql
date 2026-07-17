@@ -111,6 +111,18 @@ grant select, insert, update, delete on public.player_states to anon, authentica
 grant select, insert on public.room_events to anon, authenticated;
 grant usage, select on sequence public.room_events_id_seq to anon, authenticated;
 
+-- Client-safe player policies. The RPC below remains the canonical path, but
+-- these policies keep PostgREST/FK-related reads and repairs from being blocked
+-- by RLS when a browser session uses the anon publishable key.
+drop policy if exists "public players read" on public.players;
+create policy "public players read" on public.players for select using (true);
+drop policy if exists "public players insert" on public.players;
+create policy "public players insert" on public.players for insert with check (true);
+drop policy if exists "public players update" on public.players;
+create policy "public players update" on public.players for update using (true) with check (true);
+drop policy if exists "public player devices insert" on public.player_devices;
+create policy "public player devices insert" on public.player_devices for insert with check (true);
+
 drop policy if exists "public leaderboard read" on public.leaderboards;
 create policy "public leaderboard read" on public.leaderboards for select using (true);
 drop policy if exists "public leaderboard insert" on public.leaderboards;
