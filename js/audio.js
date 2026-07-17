@@ -133,5 +133,26 @@ const GameAudio = (() => {
     blip({ freq: up ? 180 : 240, type: 'triangle', dur: 0.3, vol: 0.08, slide: up ? 120 : -140 });
   }
 
-  return { startAmbient, uiHover, uiClick, uiError, heartbeat, slam, stinger };
+  function flashlightFlicker() {
+    blip({ freq: 880, type: 'square', dur: 0.035, vol: 0.045, slide: -260 });
+  }
+
+  function fadeOutLight() {
+    if (!started) return;
+    ensureCtx();
+    const t = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(96, t);
+    osc.frequency.exponentialRampToValueAtTime(34, t + 1.3);
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(0.12, t + 0.08);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 1.45);
+    osc.connect(gain).connect(master);
+    osc.start(t);
+    osc.stop(t + 1.55);
+  }
+
+  return { startAmbient, uiHover, uiClick, uiError, heartbeat, slam, stinger, flashlightFlicker, fadeOutLight };
 })();
