@@ -91,6 +91,7 @@ const Net = (() => {
       if (row.event_type === 'countdown-cancel') this.events.onCountdownCancel?.(row.payload?.reason);
       if (row.event_type === 'game-start') this.events.onGameStart?.();
       if (row.event_type === 'room-closed') this.close('el anfitrión cerró la sala');
+      if (row.event_type === 'player-state') this.events.onPlayerState?.(row.actor_session_id, row.payload);
     }
 
     async setReady(ready) {
