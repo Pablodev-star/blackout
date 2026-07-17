@@ -1008,7 +1008,10 @@ input {
   height: clamp(240px, 55vw, 560px);
   border: 2px solid rgba(224, 43, 51, 0.25);
   border-radius: 50%;
-  animation: ring-pulse 1s ease-out infinite;
+  /* la onda expansiva no existe en los 2 primeros segundos:
+     solo aparece a partir de intensity-3 */
+  visibility: hidden;
+  animation: none;
 }
 @keyframes ring-pulse {
   0% { transform: scale(0.7); opacity: 0.9; }
@@ -1018,14 +1021,26 @@ input {
 /* intensidad progresiva */
 #countdown-overlay.intensity-1 .countdown-number { animation-duration: 1s; }
 #countdown-overlay.intensity-3 { background: rgba(10, 1, 2, 0.9); }
-#countdown-overlay.intensity-3 .countdown-ring { border-color: rgba(224, 43, 51, 0.5); animation-duration: 0.7s; }
+#countdown-overlay.intensity-3 .countdown-ring {
+  visibility: visible;
+  border-color: rgba(224, 43, 51, 0.5);
+  animation: ring-pulse 0.7s ease-out infinite;
+}
 #countdown-overlay.intensity-4 { animation: overlay-shake 0.35s linear infinite; background: rgba(20, 2, 3, 0.92); }
-#countdown-overlay.intensity-4 .countdown-ring { border-color: rgba(224, 43, 51, 0.75); animation-duration: 0.5s; }
+#countdown-overlay.intensity-4 .countdown-ring {
+  visibility: visible;
+  border-color: rgba(224, 43, 51, 0.75);
+  animation: ring-pulse 0.5s ease-out infinite;
+}
 #countdown-overlay.intensity-5 { animation: overlay-shake 0.18s linear infinite; background: rgba(30, 2, 4, 0.94); }
 #countdown-overlay.intensity-5 .countdown-number {
   text-shadow: 0 0 60px var(--blood-bright), 0 0 160px var(--blood-bright);
 }
-#countdown-overlay.intensity-5 .countdown-ring { border-color: var(--blood-bright); animation-duration: 0.35s; }
+#countdown-overlay.intensity-5 .countdown-ring {
+  visibility: visible;
+  border-color: var(--blood-bright);
+  animation: ring-pulse 0.35s ease-out infinite;
+}
 @keyframes overlay-shake {
   0% { transform: translate(0, 0); }
   25% { transform: translate(-6px, 4px); }
