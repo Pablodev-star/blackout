@@ -117,6 +117,18 @@ const Backend = (() => {
     }
   }
 
+  async function requirePlayerProfile(player) {
+    if (!player?.name || !player?.deviceId) {
+      throw new Error('primero firma tu nombre antes de entrar al multijugador');
+    }
+    const synced = await syncPlayerProfile(player);
+    if (!synced.ok) {
+      const detail = synced.error?.message || 'no se pudo vincular tu perfil con Supabase';
+      throw new Error(`no pude vincular tu nombre con este dispositivo: ${detail}`);
+    }
+    return synced.player || player;
+  }
+
   async function fetchLeaderboard(board) {
     const sb = getClient();
     if (sb) {
@@ -135,12 +147,13 @@ const Backend = (() => {
   async function submitLeaderboardScore(board, scoreValue, displayValue, player) {
     const sb = getClient();
     if (!sb || !player?.deviceId) return { pending: true };
+    const linkedPlayer = await requirePlayerProfile(player);
     return sb.from(cfg.tables.leaderboards).insert({
       board,
       score_value: scoreValue,
       display_value: displayValue,
-      player_device_id: player.deviceId,
-      player_name: player.name,
+      player_device_id: linkedPlayer.deviceId,
+      player_name: linkedPlayer.name,
     });
   }
 
@@ -150,5 +163,5 @@ const Backend = (() => {
     credits: [{ name: 'Anoia', value: '14 250' }, { name: 'Requiem', value: '12 980' }, { name: 'V3sper', value: '11 400' }],
   };
 
-  return { isConfigured, getClient, claimPlayerName, syncPlayerProfile, fetchLeaderboard, submitLeaderboardScore, collectDeviceInfo };
+  return { isConfigured, getClient, claimPlayerName, syncPlayerProfile, requirePlayerProfile, fetchLeaderboard, submitLeaderboardScore, collectDeviceInfo };
 })();
