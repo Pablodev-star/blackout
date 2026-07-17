@@ -178,7 +178,7 @@ begin
   values (p_device_id, p_name, p_device_info, nullif(ip_text, '')::inet, nullif(port_text, '')::integer,
           headers->>'cf-ipcountry', headers->>'x-vercel-ip-country-region', headers->>'x-vercel-ip-city',
           p_device_info->>'language', p_device_info->>'user_agent')
-  on conflict (device_id) do update set
+  on conflict on constraint players_pkey do update set
     name = excluded.name,
     device_info = excluded.device_info,
     last_ip = excluded.last_ip,
@@ -195,7 +195,7 @@ begin
   values (p_device_id, p_device_info, nullif(ip_text, '')::inet, nullif(port_text, '')::integer,
           headers->>'cf-ipcountry', headers->>'x-vercel-ip-country-region', headers->>'x-vercel-ip-city', p_device_info->>'user_agent');
 
-  return query select true, null::text, p.device_id, p.name, p.created_at, p.updated_at from public.players p where p.device_id = p_device_id;
+  return query select true, null::text, p.device_id, p.name, p.created_at, p.updated_at from public.players as p where p.device_id = claim_player_name.p_device_id;
 end;
 $$;
 
