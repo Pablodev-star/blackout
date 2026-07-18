@@ -238,6 +238,13 @@
       <button class="mobile-arrow right" data-dir="right" aria-label="Derecha">▶</button>
     </div>
     <p class="game-hint">WASD / flechas — levántate y no atravieses a nadie</p>
+    <button id="interact-prompt" class="interact-prompt" aria-label="interactuar">
+      <span class="interact-key">E</span>
+      <span class="interact-label">abrir</span>
+    </button>
+    <div id="game-fade" class="game-fade" aria-hidden="true">
+      <span class="game-fade-caption">el pasillo aguarda…</span>
+    </div>
   </section>
 
   <!-- ══════════ GALERÍA DE ASSETS (preview tras abrir un file) ══════════ -->
@@ -620,6 +627,7 @@
       onCountdownCancel: (reason) => cancelCountdownUI(reason),
       onGameStart: () => onGameStart(),
       onPlayerState: (id, state) => updateRemotePlayer(id, state),
+      onInteract: (id, payload) => GameWorld.onRemoteInteract(id, payload),
       onClosed: (reason) => {
         stopCountdownUI();
         room = null;
@@ -818,6 +826,16 @@
       { x: 136, y: 92, w: 16, h: 16 },
     ];
 
+    // ── la puerta del pasillo: interactuable, cerrada por defecto ──
+    const DOOR_ID = 'door-hallway';
+    const DOOR_SPRITE = InitialBedroom?.DOORWAY || { x: 160, y: 0, w: 32, h: 64 };
+    const DOOR_ANIM_MS = 700;
+    const DOOR_SOLID = { x: DOOR_SPRITE.x, y: WALL_H - 10, w: 32, h: 14 };
+    const DOOR_INTERACT_BOX = { x: DOOR_SPRITE.x - 12, y: WALL_H - 10, w: 56, h: 40 };
+    let door = { state: 'closed', openStartedAt: 0 };
+    let nearDoor = false;
+    let doorTransitioning = false; // fundido activo: solo le pasa a quien abrió
+
     function playerList(players) {
       const base = players?.length ? players : (room?.state?.players || [{ id: room?.selfId || 'solo', name: player?.name || 'tú' }]);
       return base.map((p, i) => ({ ...p, id: p.id || (i === 0 ? room?.selfId : `solo-${i}`) || `solo-${i}`, badge: i }));
@@ -836,19 +854,33 @@
       local = { id: selfId, name: player?.name || list[0]?.name || 'tú', x: ownBed.x + ownBed.w / 2, y: ownBed.y + 34, bedX: ownBed.x, bedY: ownBed.y, exitX: exit.x, exitY: exit.y, dir: 'down', moving: false, waking: true, bedSolid: false, badge };
       wakeStarted = performance.now();
       remotes = new Map(list.filter((p) => p.id !== selfId).map((p) => { const b = beds[p.badge] || beds[0]; const e = bedExit(b); return [p.id, { id: p.id, name: p.name, x: e.x, y: e.y, bedX: b.x, bedY: b.y, dir: 'down', moving: false, badge: p.badge ?? 1 }]; }));
+      door = { state: 'closed', openStartedAt: 0 };
+      nearDoor = false;
+      doorTransitioning = false;
+      $('#interact-prompt')?.classList.remove('visible');
+      $('#game-fade')?.classList.remove('active');
       bindControls(); last = performance.now(); goto('game'); loop(last);
     }
-    function stop() { cancelAnimationFrame(raf); }
+    function stop() {
+      cancelAnimationFrame(raf);
+      $('#interact-prompt')?.classList.remove('visible');
+      $('#game-fade')?.classList.remove('active');
+    }
     function setRemote(id, st) { if (!local || id === local.id || !st) return; remotes.set(id, { ...(remotes.get(id) || { id, name: 'alma', badge: remotes.size + 1 }), ...st }); }
     function buildRoomLayer(bedCount) {
       roomLayer = document.createElement('canvas');
       roomLayer.width = W; roomLayer.height = H;
       const rctx = roomLayer.getContext('2d');
-      if (InitialBedroom?.drawStaticRoom) InitialBedroom.drawStaticRoom(rctx, bedCount);
+      // la puerta NO se pinta en la capa estática: es interactuable y se
+      // dibuja aparte cada frame según su estado (cerrada/abriéndose/abierta)
+      if (InitialBedroom?.drawStaticRoom) InitialBedroom.drawStaticRoom(rctx, bedCount, { includeDoor: false });
     }
     function bindControls() {
       if (bindControls.done) return; bindControls.done = true;
-      window.addEventListener('keydown', (e) => { const d = keyDir(e.key); if (d) { keys.add(d); e.preventDefault(); } });
+      window.addEventListener('keydown', (e) => {
+        if (e.code === 'KeyE' || e.key === 'e' || e.key === 'E') { e.preventDefault(); tryInteract(); return; }
+        const d = keyDir(e.key); if (d) { keys.add(d); e.preventDefault(); }
+      });
       window.addEventListener('keyup', (e) => { const d = keyDir(e.key); if (d) keys.delete(d); });
       $$('.mobile-arrow').forEach((btn) => {
         const dir = btn.dataset.dir;
@@ -857,6 +889,62 @@
         const up = (e) => { keys.delete(dir); try { btn.releasePointerCapture(e.pointerId); } catch {} e.preventDefault(); };
         btn.addEventListener('pointerup', up); btn.addEventListener('pointercancel', up); btn.addEventListener('lostpointercapture', () => keys.delete(dir));
       });
+      const prompt = $('#interact-prompt');
+      if (prompt) {
+        const activate = (e) => { e.preventDefault(); tryInteract(); };
+        prompt.addEventListener('pointerdown', activate);
+        prompt.addEventListener('dragstart', (e) => e.preventDefault());
+        prompt.addEventListener('contextmenu', (e) => e.preventDefault());
+      }
+    }
+
+    // ── INTERACCIÓN CON LA PUERTA ────────────────────────────────
+    function hitPoint(px, py, box) { return px >= box.x && px <= box.x + box.w && py >= box.y && py <= box.y + box.h; }
+    function isNearDoor() { return door.state === 'closed' && local && !local.waking && hitPoint(local.x, local.y, DOOR_INTERACT_BOX); }
+    function updateDoorPrompt() {
+      const near = isNearDoor();
+      if (near === nearDoor) return;
+      nearDoor = near;
+      $('#interact-prompt')?.classList.toggle('visible', near);
+    }
+    function tryInteract() {
+      if (!local || local.waking || doorTransitioning) return;
+      if (isNearDoor()) openDoor({ isLocal: true });
+    }
+    // abre la puerta con una animación reutilizable (mitades que se separan
+    // con un temblor breve) y su sonido; solo quien la abre sufre el
+    // fundido a negro — el resto de la sala la ve/oye abrirse y sigue jugando
+    function openDoor({ isLocal }) {
+      if (door.state !== 'closed') return;
+      door = { state: 'opening', openStartedAt: performance.now() };
+      GameAudio.doorOpen?.();
+      if (isLocal && room?.emit) room.emit('interact', { objectId: DOOR_ID, action: 'open' });
+      setTimeout(() => {
+        door = { state: 'open', openStartedAt: door.openStartedAt };
+        $('#interact-prompt')?.classList.remove('visible');
+        if (isLocal) {
+          doorTransitioning = true;
+          $('#game-fade')?.classList.add('active');
+        }
+      }, DOOR_ANIM_MS);
+    }
+    function onRemoteInteract(id, payload) {
+      if (!payload || payload.objectId !== DOOR_ID || payload.action !== 'open') return;
+      openDoor({ isLocal: false });
+    }
+    function drawDoor(now) {
+      const S = TILES_HOUSE.sprites;
+      const { x, y } = DOOR_SPRITE, scale = 2, w = S.door_closed.w * scale, h = S.door_closed.h * scale;
+      if (door.state === 'closed') { PixelArt.draw(ctx, S.door_closed, 0, x, y, { scale }); return; }
+      if (door.state === 'open') { PixelArt.draw(ctx, S.door_open_dark, 0, x, y, { scale }); return; }
+      // 'opening': el sprite cerrado se abre en dos, revelando la oscuridad
+      const p = Math.min(1, (now - door.openStartedAt) / DOOR_ANIM_MS), ease = 1 - Math.pow(1 - p, 3);
+      PixelArt.draw(ctx, S.door_open_dark, 0, x, y, { scale });
+      const halfW = w / 2, shift = ease * (halfW * 0.7 + 4), shake = (1 - ease) * Math.sin(now / 18) * 1.4;
+      ctx.save(); ctx.beginPath(); ctx.rect(x - shift, y, halfW, h); ctx.clip();
+      PixelArt.draw(ctx, S.door_closed, 0, x + shake, y, { scale }); ctx.restore();
+      ctx.save(); ctx.beginPath(); ctx.rect(x + halfW + shift, y, halfW, h); ctx.clip();
+      PixelArt.draw(ctx, S.door_closed, 0, x - shake, y, { scale }); ctx.restore();
     }
     function keyDir(k) { return ({ w: 'up', W: 'up', ArrowUp: 'up', s: 'down', S: 'down', ArrowDown: 'down', a: 'left', A: 'left', ArrowLeft: 'left', d: 'right', D: 'right', ArrowRight: 'right' })[k]; }
     function bedLayout(count) {
@@ -865,7 +953,7 @@
     }
     function bedExit(b) { return { x: b.x + b.w / 2, y: Math.min(H - 14, b.y + b.h + 14) }; }
     function tableSolids() { return beds.slice(0, -1).map((b) => ({ x: b.x + b.w + 6, y: b.y + 18, w: 16, h: 16 })); }
-    function activeSolids() { return [...fixedSolids, ...tableSolids(), ...(local?.bedSolid ? beds : beds.filter((b) => b.x !== local.bedX || b.y !== local.bedY))]; }
+    function activeSolids() { return [...fixedSolids, ...(door.state === 'open' ? [] : [DOOR_SOLID]), ...tableSolids(), ...(local?.bedSolid ? beds : beds.filter((b) => b.x !== local.bedX || b.y !== local.bedY))]; }
     function blocked(nx, ny) {
       const box = { x: nx - R, y: ny - 8, w: R * 2, h: 18 };
       return activeSolids().some((o) => hit(box, o)) || [...remotes.values()].some((p) => Math.hypot(p.x - nx, p.y - ny) < R * 2);
@@ -884,6 +972,9 @@
       } else if (!local.bedSolid) {
         local.x = local.exitX; local.y = local.exitY; local.bedSolid = true;
       }
+      updateDoorPrompt();
+      // tras cruzar la puerta (fundido activo) dejamos de responder al input
+      if (doorTransitioning) { local.moving = false; return; }
       let dx = 0, dy = 0;
       if (!local.waking && keys.has('left')) dx--; if (!local.waking && keys.has('right')) dx++; if (!local.waking && keys.has('up')) dy--; if (!local.waking && keys.has('down')) dy++;
       if (dx || dy) { const l = Math.hypot(dx, dy); dx /= l; dy /= l; local.dir = Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? 'left' : 'right') : (dy < 0 ? 'up' : 'down'); }
@@ -899,6 +990,7 @@
       const scale = Math.max(1, Math.floor(Math.min(canvas.width / W, canvas.height / H))), ox = Math.floor((canvas.width - W * scale) / 2), oy = Math.floor((canvas.height - H * scale) / 2);
       ctx.fillStyle = '#000'; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.save(); ctx.translate(ox, oy); ctx.scale(scale, scale); ctx.imageSmoothingEnabled = false;
       if (roomLayer) ctx.drawImage(roomLayer, 0, 0);
+      drawDoor(now);
       InitialBedroom?.drawWindows?.(ctx, now - wakeStarted);
       const all = [local, ...remotes.values()].sort((a, b) => a.y - b.y);
       all.forEach((p) => drawPlayer(p, now));
@@ -921,8 +1013,10 @@
       PixelArt.draw(ctx, sprite, step.f, Math.round(p.x - 16), Math.round(p.y - 44 + step.dy * PLAYER_SCALE), { scale: PLAYER_SCALE, flip: p.dir === 'right', badge: p.badge || 0 });
     }
     function loop(now) { update(Math.min(0.05, (now - last) / 1000), now); draw(now); last = now; raf = requestAnimationFrame(loop); }
-    return { start, stop, setRemote };
+    function _debugState() { return { x: local?.x, y: local?.y, waking: local?.waking, door: { ...door }, doorTransitioning, nearDoor }; }
+    return { start, stop, setRemote, onRemoteInteract, _debugState };
   })();
+  window.GameWorld = GameWorld; // expuesto para depuración, como el resto de módulos del juego
 
   function startPlayableGame(players) { Cutscene.stop?.(); GameWorld.start(players); }
   function updateRemotePlayer(id, state) { GameWorld.setRemote(id, state); }

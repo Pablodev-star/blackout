@@ -154,5 +154,39 @@ const GameAudio = (() => {
     osc.stop(t + 1.55);
   }
 
-  return { startAmbient, uiHover, uiClick, uiError, heartbeat, slam, stinger, flashlightFlicker, fadeOutLight };
+  // ── Puerta que se abre: bisagra oxidada + golpe sordo final ──
+  // Reutilizable para cualquier interactuable futuro (cajones, armarios…)
+  function doorOpen() {
+    if (!started) return;
+    ensureCtx();
+    const t = ctx.currentTime;
+    const len = 0.9;
+    const buf = ctx.createBuffer(1, ctx.sampleRate * len, ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * 0.6;
+    const ns = ctx.createBufferSource(); ns.buffer = buf;
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass'; bp.Q.value = 8;
+    bp.frequency.setValueAtTime(280, t);
+    bp.frequency.linearRampToValueAtTime(620, t + 0.5);
+    bp.frequency.linearRampToValueAtTime(340, t + 0.9);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(0.1, t + 0.15);
+    g.gain.linearRampToValueAtTime(0.06, t + 0.7);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.95);
+    ns.connect(bp).connect(g).connect(master);
+    ns.start(t); ns.stop(t + 1);
+    const thud = ctx.createOscillator();
+    const tg = ctx.createGain();
+    thud.type = 'sine'; thud.frequency.setValueAtTime(85, t + 0.85);
+    thud.frequency.exponentialRampToValueAtTime(38, t + 1.05);
+    tg.gain.setValueAtTime(0.0001, t + 0.85);
+    tg.gain.linearRampToValueAtTime(0.22, t + 0.87);
+    tg.gain.exponentialRampToValueAtTime(0.0001, t + 1.1);
+    thud.connect(tg).connect(master);
+    thud.start(t + 0.85); thud.stop(t + 1.15);
+  }
+
+  return { startAmbient, uiHover, uiClick, uiError, heartbeat, slam, stinger, flashlightFlicker, fadeOutLight, doorOpen };
 })();

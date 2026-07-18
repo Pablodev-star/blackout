@@ -1360,3 +1360,91 @@ input {
   pointer-events: none;
   text-shadow: 0 0 10px #000;
 }
+
+/* ── PROMPT DE INTERACCIÓN (E / toca) ── */
+.interact-prompt {
+  position: absolute;
+  left: 50%;
+  bottom: 16vh;
+  transform: translateX(-50%) translateY(10px) scale(0.9);
+  z-index: 9;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.9rem;
+  background: rgba(10, 8, 10, 0.78);
+  border: 1px solid rgba(224, 43, 51, 0.35);
+  border-radius: 8px;
+  box-shadow: 0 0 18px rgba(0, 0, 0, 0.6);
+  opacity: 0;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+.interact-prompt.visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0) scale(1);
+  pointer-events: auto;
+  animation: interact-pulse 1.6s ease-in-out infinite;
+}
+@keyframes interact-pulse {
+  0%, 100% { box-shadow: 0 0 18px rgba(0, 0, 0, 0.6); }
+  50% { box-shadow: 0 0 26px rgba(224, 43, 51, 0.4); }
+}
+.interact-key {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  font-family: var(--font-mono);
+  font-weight: bold;
+  font-size: 0.85rem;
+  color: var(--bone);
+  background: rgba(216, 210, 196, 0.12);
+  border: 1px solid rgba(216, 210, 196, 0.3);
+  border-radius: 4px;
+}
+.interact-label {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  letter-spacing: 0.1em;
+  color: var(--bone-dim);
+  text-transform: lowercase;
+}
+/* en táctil, ocultamos la tecla "E" (no aplica) y agrandamos el toque */
+@media (hover: none) and (pointer: coarse) {
+  .interact-key { display: none; }
+  .interact-prompt { padding: 0.7rem 1.2rem; bottom: 20vh; }
+  .interact-label::before { content: 'toca para '; }
+}
+
+/* ── FUNDIDO A NEGRO TRAS CRUZAR LA PUERTA ── */
+.game-fade {
+  position: absolute;
+  inset: 0;
+  z-index: 12;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #000;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 1.2s ease-in;
+}
+.game-fade.active { opacity: 1; }
+.game-fade-caption {
+  font-family: var(--font-mono);
+  font-size: clamp(0.8rem, 2vw, 1.05rem);
+  letter-spacing: 0.3em;
+  text-transform: lowercase;
+  color: var(--bone-dim);
+  opacity: 0;
+  animation: fade-caption-in 1s ease-out 1s forwards;
+}
+@keyframes fade-caption-in {
+  from { opacity: 0; }
+  to { opacity: 0.75; }
+}
