@@ -74,7 +74,10 @@
   }
 
   // ── capa estática: se pinta una sola vez ──────────────────────
-  function drawStaticRoom(ctx, bedCount = cast.length) {
+  // includeDoor: la cutscene la pinta abierta como ambientación fija;
+  // el juego real la dibuja aparte, cuadro a cuadro, porque es
+  // interactuable (cerrada → abriéndose → abierta).
+  function drawStaticRoom(ctx, bedCount = cast.length, { includeDoor = true } = {}) {
     const S = TILES_HOUSE.sprites;
 
     // pared: paneles a escala 4, con papel rasgado y una huella de sangre
@@ -99,7 +102,8 @@
     PixelArt.draw(ctx, S.rug_edge, 0, 176, 88, { scale: 2 });
 
     // puerta abierta al pasillo: un rectángulo de pura oscuridad
-    PixelArt.draw(ctx, S.door_open_dark, 0, DOORWAY.x, DOORWAY.y, { scale: 2 });
+    // (en el juego real la dibuja GameWorld, porque es interactuable)
+    if (includeDoor) PixelArt.draw(ctx, S.door_open_dark, 0, DOORWAY.x, DOORWAY.y, { scale: 2 });
 
     // armario pegado a la pared, con su rendija de sombra al lado
     PixelArt.draw(ctx, S.wardrobe, 0, WARDROBE.x, WARDROBE.y, { scale: 2 });

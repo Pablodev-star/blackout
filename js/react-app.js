@@ -238,6 +238,13 @@
       <button class="mobile-arrow right" data-dir="right" aria-label="Derecha">▶</button>
     </div>
     <p class="game-hint">WASD / flechas — levántate y no atravieses a nadie</p>
+    <button id="interact-prompt" class="interact-prompt" aria-label="interactuar">
+      <span class="interact-key">E</span>
+      <span class="interact-label">abrir</span>
+    </button>
+    <div id="game-fade" class="game-fade" aria-hidden="true">
+      <span class="game-fade-caption">el pasillo aguarda…</span>
+    </div>
   </section>
 
   <!-- ══════════ GALERÍA DE ASSETS (preview tras abrir un file) ══════════ -->
